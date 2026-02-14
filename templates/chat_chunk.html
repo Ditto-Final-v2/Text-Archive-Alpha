@@ -1,0 +1,63 @@
+{% for m in messages %}
+  {% if loop.first or m.display_date_key != loop.previtem.display_date_key %}
+    <div class="chat-date-separator" data-date-key="{{ m.display_date_key }}">
+      <span>{{ m.display_date }}</span>
+    </div>
+  {% endif %}
+  {% set who = m.sender if m.sender in ['person_a','person_b'] else 'person_b' %}
+  <div class="msg {{ who }}" data-ts="{{ m.ts_unix }}" data-id="{{ m.id }}" data-date-key="{{ m.display_date_key }}" data-date-label="{{ m.display_date }}">
+    <div class="bubble">
+      <div class="bubble-meta">
+        <span>{{ m.display_date }} {{ m.display_time }} &middot; {{ m.sender_label }} &middot; <span class="msg-id">#{{ m.id }}</span></span>
+        <span id="heart-{{ m.id }}">
+          {% if m.id in bookmarked_ids %}
+            <form hx-post="/bookmarks/remove"
+                  hx-target="#heart-{{ m.id }}"
+                  hx-swap="outerHTML"
+                  style="display:inline;">
+              <input type="hidden" name="message_id" value="{{ m.id }}">
+              <button class="heart-btn" type="submit" title="Remove bookmark">&#9829;</button>
+            </form>
+          {% else %}
+            <button class="heart-btn"
+                    hx-get="/bookmarks/picker?message_id={{ m.id }}"
+                    hx-target="#bookmark-modal"
+                    hx-swap="innerHTML"
+                    onclick="openBookmarkModal()"
+                    title="Bookmark">
+              &#9825;
+            </button>
+          {% endif %}
+        </span>
+      </div>
+      {% set has_image_attachment = (m.attachments | selectattr('is_image') | list | length) > 0 %}
+      {% set body_clean = (m.body or '') | trim | lower %}
+      {% set is_photo_placeholder = body_clean in ['[photo]', '(photo)', 'photo', '[image]', '(image)', 'image'] %}
+      <div class="bubble-body photo-fallback" {% if has_image_attachment and is_photo_placeholder %}style="display:none;"{% endif %}>{{ m.body }}</div>
+      {% if m.attachments %}
+        <div class="attachments">
+          {% for a in m.attachments %}
+            {% if a.is_image %}
+              <button type="button"
+                      class="attachment-open-btn"
+                      data-image-viewer="1"
+                      data-preview-url="{{ a.preview_url }}"
+                      data-download-url="{{ a.url }}"
+                      data-alt="{{ a.filename or 'Photo attachment' }}" onclick="window.taOpenImageViewer && window.taOpenImageViewer(this.getAttribute('data-preview-url'), this.getAttribute('data-download-url'), this.getAttribute('data-alt')); return false;">
+                <img class="attachment-img" src="{{ a.preview_url }}" alt="{{ a.filename or 'Photo attachment' }}" loading="lazy" onerror="(function(img){var root=img.closest('.bubble');if(!root)return;var fb=root.querySelector('.photo-fallback');if(fb){fb.style.display='block';}})(this)">
+              </button>
+            {% else %}
+              <a class="attachment-link" href="{{ a.url }}" target="_blank" rel="noopener">
+                {{ a.filename or 'Attachment' }}
+              </a>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endfor %}
+
+
+
+

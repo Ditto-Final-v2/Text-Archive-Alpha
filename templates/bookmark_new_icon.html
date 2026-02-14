@@ -1,0 +1,27 @@
+<div class="modal-backdrop" onclick="closeBookmarkModal()"></div>
+
+<div class="modal">
+  <div class="modal-header">
+    <div class="modal-title">Pick an icon</div>
+    <button class="modal-x" onclick="closeBookmarkModal()" title="Close">&#10005;</button>
+  </div>
+
+  <div class="modal-body">
+    <p class="muted" style="margin-top:0; margin-bottom:10px;">{{ name }}</p>
+    <div class="picker-grid picker-grid-icons">
+      {% for icon in icon_options %}
+        <form hx-post="/bookmarks/add-new"
+              hx-target="#heart-{{ message_id }}"
+              hx-swap="outerHTML"
+              hx-on::after-request="closeBookmarkModal()">
+          <input type="hidden" name="message_id" value="{{ message_id }}">
+          <input type="hidden" name="name" value="{{ name }}">
+          <input type="hidden" name="icon_key" value="{{ icon.key }}">
+          <button class="picker-btn picker-btn-icon {% if icon.key == default_icon_key %}picker-btn-default{% endif %}" type="submit">
+            {{ icon.entity|safe }}
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+  </div>
+</div>

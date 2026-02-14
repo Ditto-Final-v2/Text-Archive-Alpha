@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Longest Messages</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/image_viewer.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/features" class="back">&#8592; Back to Features</a>
+    <h2>Longest Messages</h2>
+    <p class="muted">Top {{ limit }} messages by word count, with context windows. The longest message is specially highlighted.</p>
+
+    {% if result_batches|length == 0 %}
+      <div class="card">
+        <p class="muted">No messages found.</p>
+      </div>
+    {% else %}
+      <div class="result-batches">
+        {% for batch in result_batches %}
+          <div class="result-batch {% if batch.is_longest %}longest-batch{% endif %}">
+            <div class="result-batch-head">
+              <div class="result-match-inline">
+                <span class="result-match-label">Words:</span>
+                <span class="result-match-text">{{ batch.word_count }}</span>
+                {% if batch.is_longest %}
+                  <span class="result-match-label" style="margin-left:10px;">Longest</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="result-thread">
+              {% for m in batch.messages %}
+                {% set who = m.sender if m.sender in ['person_a','person_b'] else 'person_b' %}
+                {% set has_image_attachment = (m.attachments | selectattr('is_image') | list | length) > 0 %}
+                {% set body_clean = (m.body or '') | trim | lower %}
+                {% set is_photo_placeholder = body_clean in ['[photo]', '(photo)', 'photo', '[image]', '(image)', 'image'] %}
+                <div class="result-msg {{ who }} {% if m.is_center %}center result-center-clickable{% else %}context{% endif %} {% if m.is_center and batch.is_longest %}longest-center-msg{% endif %}" {% if m.is_center %}data-center-href="{{ batch.center_href }}"{% endif %}>
+                  <div class="result-bubble">
+                    <div class="result-meta">{{ m.display_date }} {{ m.display_time }} &middot; {{ m.sender_label }} &middot; <span class="msg-id">#{{ m.id }}</span></div>
+                    <div class="result-body photo-fallback" {% if has_image_attachment and is_photo_placeholder %}style="display:none;"{% endif %}>{{ m.body[:260] }}{% if m.body|length > 260 %}&hellip;{% endif %}</div>
+
+                    {% if m.attachments %}
+                      <div class="result-attachments">
+                        {% for a in m.attachments %}
+                          {% if a.is_image %}
+                            <button type="button"
+                                    class="result-thumb-btn"
+                                    data-image-viewer="1"
+                                    data-preview-url="{{ a.preview_url }}"
+                                    data-download-url="{{ a.url }}"
+                                    data-alt="{{ a.filename or 'Photo attachment' }}" onclick="window.taOpenImageViewer && window.taOpenImageViewer(this.getAttribute('data-preview-url'), this.getAttribute('data-download-url'), this.getAttribute('data-alt')); return false;">
+                              <img class="result-thumb" src="{{ a.preview_url }}" alt="{{ a.filename or 'Photo attachment' }}" loading="lazy" onerror="(function(img){var root=img.closest('.result-bubble');if(!root)return;var fb=root.querySelector('.photo-fallback');if(fb){fb.style.display='block';}})(this)">
+                            </button>
+                          {% else %}
+                            <a class="attachment-link" href="{{ a.url }}" target="_blank" rel="noopener">{{ a.filename or 'Attachment' }}</a>
+                          {% endif %}
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <script>
+    (function () {
+      const SCROLL_KEY = "ta_longest_scroll::" + window.location.pathname + window.location.search;
+
+      document.addEventListener("click", function (e) {
+        const link = e.target && e.target.closest ? e.target.closest('a[href^="/chat/"]') : null;
+        if (!link) return;
+        sessionStorage.setItem(SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0));
+      });
+
+      window.addEventListener("beforeunload", function () {
+        sessionStorage.setItem(SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0));
+      });
+
+      function restoreScroll() {
+        const raw = sessionStorage.getItem(SCROLL_KEY);
+        if (!raw) return;
+        const y = Number(raw);
+        if (!Number.isFinite(y) || y < 0) return;
+        requestAnimationFrame(function () {
+          window.scrollTo(0, y);
+        });
+      }
+
+      window.addEventListener("pageshow", restoreScroll);
+      restoreScroll();
+    })();
+
+    document.addEventListener("click", function (e) {
+      const row = e.target && e.target.closest ? e.target.closest(".result-center-clickable") : null;
+      if (!row) return;
+      if (e.target.closest("a, button, input, select, textarea, label")) return;
+      const href = row.getAttribute("data-center-href");
+      if (!href) return;
+      const SCROLL_KEY = "ta_longest_scroll::" + window.location.pathname + window.location.search;
+      sessionStorage.setItem(SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0));
+      window.location.href = href;
+    });
+  </script>
+</body>
+</html>
+
+
+

@@ -1,0 +1,21 @@
+{% if messages|length == 0 %}
+  <p class="muted">No highlights yet for this signal.</p>
+{% else %}
+  <div class="signals-msg-list">
+    {% for m in messages %}
+      <a class="result rhythm-day-result sender-{{ m.sender }}" href="{{ m.chat_href }}">
+        <div class="meta rhythm-day-meta">
+          <span class="ts">{{ m.display_date }} {{ m.display_time }}</span>
+          <span class="dir">
+            {% if m.sender == 'person_a' %}{{ participant_a_label }}{% elif m.sender == 'person_b' %}{{ participant_b_label }}{% else %}Unknown{% endif %}
+          </span>
+          <span class="msg-id">#{{ m.id }}</span>
+          <span class="msg-id">Match {{ (m.signal_score * 100)|round(0, 'common')|int }}%</span>
+        </div>
+        <div class="snippet">{{ m.body[:260] }}{% if m.body|length > 260 %}&hellip;{% endif %}</div>
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}
+
+

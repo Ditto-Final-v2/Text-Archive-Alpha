@@ -1,0 +1,6 @@
+.\.venv\Scripts\Activate.ps1
+$env:TEXTAPP_QUERY_EXPANDER_MODEL="google/flan-t5-base"
+uvicorn app:app --reload --host 127.0.0.1 --port 8000
+
+
+http://127.0.0.1:8000

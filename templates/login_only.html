@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login - Text Archive</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="home-page">
+  <div class="wrap">
+    <form method="post" action="/login" class="card login-only-card">
+      <p>Enter password:</p>
+      <input type="password" name="password" placeholder="Password" />
+      <button type="submit">Login</button>
+      {% if request.query_params.get("bad") %}
+        <p class="bad">Hint: How much I love you</p>
+      {% endif %}
+    </form>
+    <form method="post" action="/setup/reset" onsubmit="return confirm('Reset archive data and restart setup?');" class="setup-reset-inline">
+      <input type="hidden" name="confirm" value="RESET" />
+      <button type="submit" class="danger-btn">Reset Archive</button>
+    </form>
+  </div>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>On This Day</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/image_viewer.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/features" class="back">&#8592; Back to Features</a>
+    <h2>On This Day</h2>
+    <p class="muted">A look back at {{ month_day_label }} across the years.</p>
+
+    {% if sections|length == 0 %}
+      <div class="card">
+        <p class="muted">No messages found for this date across available years.</p>
+      </div>
+    {% else %}
+      {% for sec in sections %}
+        <div class="card">
+          <div class="result-batch-head" style="margin-bottom:10px;">
+            <h3 style="margin:0;">{{ sec.section_label }}</h3>
+            {% if sec.first_message_href %}
+              <a class="result-open" href="{{ sec.first_message_href }}">Jump to first message of day &#8594;</a>
+            {% endif %}
+          </div>
+
+          <div class="result-batches">
+            {% for batch in sec.result_batches %}
+              <div class="result-batch">
+                <div class="result-batch-head">
+                  <span class="muted">{{ sec.pretty_date }}</span>
+                </div>
+                <div class="result-thread">
+                  {% for m in batch.messages %}
+                    {% set who = m.sender if m.sender in ['person_a','person_b'] else 'person_b' %}
+                    {% set has_image_attachment = (m.attachments | selectattr('is_image') | list | length) > 0 %}
+                    {% set body_clean = (m.body or '') | trim | lower %}
+                    {% set is_photo_placeholder = body_clean in ['[photo]', '(photo)', 'photo', '[image]', '(image)', 'image'] %}
+                    <div class="result-msg {{ who }} {% if m.is_center %}center result-center-clickable{% else %}context{% endif %}" {% if m.is_center %}data-center-href="{{ batch.center_href }}"{% endif %}>
+                      <div class="result-bubble">
+                        <div class="result-meta">{{ m.display_date }} {{ m.display_time }} &middot; {{ m.sender_label }} &middot; <span class="msg-id">#{{ m.id }}</span></div>
+                        <div class="result-body photo-fallback" {% if has_image_attachment and is_photo_placeholder %}style="display:none;"{% endif %}>{{ m.body[:220] }}{% if m.body|length > 220 %}&hellip;{% endif %}</div>
+                        {% if m.attachments %}
+                          <div class="result-attachments">
+                            {% for a in m.attachments %}
+                              {% if a.is_image %}
+                                <button type="button"
+                                        class="result-thumb-btn"
+                                        data-image-viewer="1"
+                                        data-preview-url="{{ a.preview_url }}"
+                                        data-download-url="{{ a.url }}"
+                                        data-alt="{{ a.filename or 'Photo attachment' }}" onclick="window.taOpenImageViewer && window.taOpenImageViewer(this.getAttribute('data-preview-url'), this.getAttribute('data-download-url'), this.getAttribute('data-alt')); return false;">
+                                  <img class="result-thumb" src="{{ a.preview_url }}" alt="{{ a.filename or 'Photo attachment' }}" loading="lazy" onerror="(function(img){var root=img.closest('.result-bubble');if(!root)return;var fb=root.querySelector('.photo-fallback');if(fb){fb.style.display='block';}})(this)">
+                                </button>
+                              {% else %}
+                                <a class="attachment-link" href="{{ a.url }}" target="_blank" rel="noopener">{{ a.filename or 'Attachment' }}</a>
+                              {% endif %}
+                            {% endfor %}
+                          </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+  <script>
+    document.addEventListener("click", function (e) {
+      const row = e.target && e.target.closest ? e.target.closest(".result-center-clickable") : null;
+      if (!row) return;
+      if (e.target.closest("a, button, input, select, textarea, label")) return;
+      const href = row.getAttribute("data-center-href");
+      if (!href) return;
+      window.location.href = href;
+    });
+  </script>
+</body>
+</html>
+
+
+

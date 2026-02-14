@@ -1,0 +1,319 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat view</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="/static/image_viewer.js"></script>
+</head>
+<body class="chat-page">
+  <div class="wrap">
+    <div class="chat-topnav">
+      <a href="{{ back_href }}" class="back">Back to {{ back_label }}</a>
+    </div>
+    <div class="chat-header">
+      <h2 style="margin:0;">Chat timeline</h2>
+      <p class="muted chat-centered-label">Centered on #{{ center_id }}</p>
+    </div>
+
+    <div id="chatScroll" class="chat-scroll">
+      <button id="load-older" class="load load-top" type="button" style="display:none;" aria-hidden="true" tabindex="-1">Load older</button>
+
+      <div id="chat" class="chat">
+        {% for m in messages %}
+          {% if loop.first or m.display_date_key != loop.previtem.display_date_key %}
+            <div class="chat-date-separator" data-date-key="{{ m.display_date_key }}">
+              <span>{{ m.display_date }}</span>
+            </div>
+          {% endif %}
+          {% set who = m.sender if m.sender in ['person_a','person_b'] else 'person_b' %}
+          <div class="msg {{ who }} {% if m.id == center_id %}center{% endif %}"
+               data-ts="{{ m.ts_unix }}"
+               data-id="{{ m.id }}"
+               data-date-key="{{ m.display_date_key }}"
+               data-date-label="{{ m.display_date }}"
+              {% if m.id == center_id %}id="center"{% endif %}>
+            <div class="bubble">
+              <div class="bubble-meta">
+                <span>{{ m.display_date }} {{ m.display_time }} &middot; {{ m.sender_label }} &middot; <span class="msg-id">#{{ m.id }}</span></span>
+                <span id="heart-{{ m.id }}">
+                  {% if m.id in bookmarked_ids %}
+                    <form hx-post="/bookmarks/remove"
+                          hx-target="#heart-{{ m.id }}"
+                          hx-swap="outerHTML"
+                          style="display:inline;">
+                      <input type="hidden" name="message_id" value="{{ m.id }}">
+                      <button class="heart-btn" type="submit" title="Remove bookmark">&#9829;</button>
+                    </form>
+                  {% else %}
+                    <button class="heart-btn"
+                            hx-get="/bookmarks/picker?message_id={{ m.id }}"
+                            hx-target="#bookmark-modal"
+                            hx-swap="innerHTML"
+                            onclick="openBookmarkModal()"
+                            title="Bookmark">
+                      &#9825;
+                    </button>
+                  {% endif %}
+                </span>
+              </div>
+              {% set has_image_attachment = (m.attachments | selectattr('is_image') | list | length) > 0 %}
+              {% set body_clean = (m.body or '') | trim | lower %}
+              {% set is_photo_placeholder = body_clean in ['[photo]', '(photo)', 'photo', '[image]', '(image)', 'image'] %}
+              <div class="bubble-body photo-fallback" {% if has_image_attachment and is_photo_placeholder %}style="display:none;"{% endif %}>{{ m.body }}</div>
+              {% if m.attachments %}
+                <div class="attachments">
+                  {% for a in m.attachments %}
+                    {% if a.is_image %}
+                      <button type="button"
+                              class="attachment-open-btn"
+                              data-image-viewer="1"
+                              data-preview-url="{{ a.preview_url }}"
+                              data-download-url="{{ a.url }}"
+                              data-alt="{{ a.filename or 'Photo attachment' }}" onclick="window.taOpenImageViewer && window.taOpenImageViewer(this.getAttribute('data-preview-url'), this.getAttribute('data-download-url'), this.getAttribute('data-alt')); return false;">
+                        <img class="attachment-img" src="{{ a.preview_url }}" alt="{{ a.filename or 'Photo attachment' }}" loading="lazy" onerror="(function(img){var root=img.closest('.bubble');if(!root)return;var fb=root.querySelector('.photo-fallback');if(fb){fb.style.display='block';}})(this)">
+                      </button>
+                    {% else %}
+                      <a class="attachment-link" href="{{ a.url }}" target="_blank" rel="noopener">
+                        {{ a.filename or 'Attachment' }}
+                      </a>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <button id="load-newer" class="load load-bottom" type="button">Load newer</button>
+    </div>
+  </div>
+
+  <script>
+    const chatScroll = document.getElementById("chatScroll");
+    const chat = document.getElementById("chat");
+    const btnOlder = document.getElementById("load-older");
+    const btnNewer = document.getElementById("load-newer");
+    let lastUserScrollAt = 0;
+    let lastOlderLoadAt = 0;
+
+    function firstMsg() { return chat.querySelector(".msg"); }
+    function lastMsg()  {
+      const msgs = chat.querySelectorAll(".msg");
+      return msgs.length ? msgs[msgs.length - 1] : null;
+    }
+
+    function rebuildDateSeparators() {
+      chat.querySelectorAll(".chat-date-separator").forEach((el) => el.remove());
+      const msgs = chat.querySelectorAll(".msg");
+      let prevDate = "";
+      msgs.forEach((msg) => {
+        const key = msg.getAttribute("data-date-key") || "";
+        const label = msg.getAttribute("data-date-label") || "";
+        if (key && key !== prevDate) {
+          const sep = document.createElement("div");
+          sep.className = "chat-date-separator";
+          sep.setAttribute("data-date-key", key);
+          const span = document.createElement("span");
+          span.textContent = label || key;
+          sep.appendChild(span);
+          chat.insertBefore(sep, msg);
+          prevDate = key;
+        }
+      });
+    }
+
+    function setOlderUrl() {
+      const first = firstMsg();
+      if (!first) return null;
+      const ts = first.getAttribute("data-ts");
+      const id = first.getAttribute("data-id");
+      return `/chat/{{ center_id }}/older?before_ts=${encodeURIComponent(ts)}&before_id=${encodeURIComponent(id)}`;
+    }
+
+    function setNewerUrl() {
+      const last = lastMsg();
+      if (!last) return null;
+      const ts = last.getAttribute("data-ts");
+      const id = last.getAttribute("data-id");
+      return `/chat/{{ center_id }}/newer?after_ts=${encodeURIComponent(ts)}&after_id=${encodeURIComponent(id)}`;
+    }
+
+    function topOffsetInScroll(el) {
+      if (!el) return 0;
+      const c = chatScroll.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      return r.top - c.top;
+    }
+
+    function adjustToAnchor(anchorId, targetTop) {
+      const anchor = chat.querySelector(`.msg[data-id="${anchorId}"]`);
+      if (!anchor) return;
+      const currentTop = topOffsetInScroll(anchor);
+      const delta = currentTop - targetTop;
+      if (Math.abs(delta) > 0.5) {
+        chatScroll.scrollTop += delta;
+      }
+    }
+
+    function collectPrependedMsgsBeforeAnchor(anchorEl) {
+      const prepended = [];
+      let node = chat.firstElementChild;
+      while (node && node !== anchorEl) {
+        if (node.classList && node.classList.contains("msg")) {
+          prepended.push(node);
+        }
+        node = node.nextElementSibling;
+      }
+      return prepended;
+    }
+
+    function stabilizeOnPrependedMedia(anchorId, targetTop, prependedMsgs, durationMs = 900) {
+      if (!anchorId || targetTop === null || targetTop === undefined) return;
+      if (!prependedMsgs || prependedMsgs.length === 0) return;
+
+      const imgs = [];
+      prependedMsgs.forEach((msg) => {
+        msg.querySelectorAll("img.attachment-img").forEach((img) => {
+          if (!img.complete) imgs.push(img);
+        });
+      });
+      if (!imgs.length) return;
+
+      let rafPending = false;
+      const scheduleAdjust = () => {
+        if (rafPending) return;
+        rafPending = true;
+        requestAnimationFrame(() => {
+          rafPending = false;
+          // Don't fight the user's active scrolling; only nudge when momentarily idle.
+          if ((performance.now() - lastUserScrollAt) < 90) return;
+          adjustToAnchor(anchorId, targetTop);
+        });
+      };
+
+      imgs.forEach((img) => {
+        img.addEventListener("load", scheduleAdjust, { once: true });
+        img.addEventListener("error", scheduleAdjust, { once: true });
+      });
+
+      setTimeout(scheduleAdjust, durationMs);
+    }
+
+    async function loadOlder() {
+      if (btnOlder.dataset.loading === "1") return;
+      if ((performance.now() - lastOlderLoadAt) < 220) return;
+      const url = setOlderUrl();
+      if (!url) return;
+
+      btnOlder.dataset.loading = "1";
+      btnOlder.disabled = true;
+
+      const anchor = firstMsg();
+      const anchorId = anchor ? anchor.getAttribute("data-id") : null;
+      const anchorTop = anchor ? topOffsetInScroll(anchor) : null;
+
+      const resp = await fetch(url, { credentials: "same-origin" });
+      const html = await resp.text();
+      const temp = document.createElement("div");
+      temp.innerHTML = html;
+      const newNodes = Array.from(temp.childNodes);
+      for (let i = newNodes.length - 1; i >= 0; i--) {
+        chat.insertBefore(newNodes[i], chat.firstChild);
+      }
+      if (window.htmx) {
+        newNodes.forEach((n) => {
+          if (n && n.nodeType === 1) window.htmx.process(n);
+        });
+      }
+
+      // Initial correction right after prepend, then keep stable while images/layout settle.
+      if (anchorId && anchorTop !== null) {
+        const sameAnchor = chat.querySelector(`.msg[data-id="${anchorId}"]`);
+        const prependedMsgs = sameAnchor ? collectPrependedMsgsBeforeAnchor(sameAnchor) : [];
+        rebuildDateSeparators();
+        if (sameAnchor) {
+          adjustToAnchor(anchorId, anchorTop);
+        }
+        stabilizeOnPrependedMedia(anchorId, anchorTop, prependedMsgs, 900);
+      } else {
+        rebuildDateSeparators();
+      }
+
+      btnOlder.dataset.loading = "0";
+      btnOlder.disabled = false;
+      lastOlderLoadAt = performance.now();
+    }
+
+    async function loadNewer() {
+      if (btnNewer.dataset.loading === "1") return;
+      const url = setNewerUrl();
+      if (!url) return;
+
+      btnNewer.dataset.loading = "1";
+      btnNewer.disabled = true;
+
+      const resp = await fetch(url, { credentials: "same-origin" });
+      const html = await resp.text();
+      const temp = document.createElement("div");
+      temp.innerHTML = html;
+      const newNodes = Array.from(temp.childNodes);
+      newNodes.forEach((n) => chat.appendChild(n));
+      if (window.htmx) {
+        newNodes.forEach((n) => {
+          if (n && n.nodeType === 1) window.htmx.process(n);
+        });
+      }
+      rebuildDateSeparators();
+
+      btnNewer.dataset.loading = "0";
+      btnNewer.disabled = false;
+    }
+
+    btnOlder.addEventListener("click", loadOlder);
+    btnNewer.addEventListener("click", loadNewer);
+
+    chatScroll.addEventListener("scroll", () => {
+      lastUserScrollAt = performance.now();
+      const nearTop = chatScroll.scrollTop < 150;
+      const nearBottom = (chatScroll.scrollTop + chatScroll.clientHeight) > (chatScroll.scrollHeight - 150);
+
+      if (nearTop) loadOlder();
+      if (nearBottom) loadNewer();
+    }, { passive: true });
+
+    (function () {
+      rebuildDateSeparators();
+      const el = document.getElementById("center");
+      if (!el) return;
+
+      const rect = el.getBoundingClientRect();
+      const containerRect = chatScroll.getBoundingClientRect();
+      const offset = (rect.top - containerRect.top) - (chatScroll.clientHeight / 2) + (rect.height / 2);
+      chatScroll.scrollTop += offset;
+    })();
+  </script>
+
+  <div id="bookmark-modal" class="modal-root" style="display:none;"></div>
+
+  <script>
+    function openBookmarkModal() {
+      const root = document.getElementById("bookmark-modal");
+      root.style.display = "block";
+    }
+
+    function closeBookmarkModal() {
+      const root = document.getElementById("bookmark-modal");
+      root.innerHTML = "";
+      root.style.display = "none";
+    }
+  </script>
+</body>
+</html>
+
+
+
+

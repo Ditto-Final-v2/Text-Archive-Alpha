@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Setup - Text Archive</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="home-page">
+  <div class="wrap">
+    <form id="setup-form" method="post" action="/setup" enctype="multipart/form-data" class="card setup-card">
+      <h2>First-time setup</h2>
+      <p class="muted">Select your XML or CSV export for processing, then choose your app password.</p>
+
+      <label class="setup-label" for="setup-data-file">Data file</label>
+      <input id="setup-data-file" name="data_file" type="file" accept=".xml,.csv,text/xml,text/csv" required />
+
+      <label class="setup-label" for="setup-your-name">Your name</label>
+      <input id="setup-your-name" type="text" name="your_name" placeholder="Your name" required />
+
+      <label class="setup-label" for="setup-partner-name">Your partner's name</label>
+      <input id="setup-partner-name" type="text" name="partner_name" placeholder="Your partner's name" required />
+
+      <label class="setup-label" for="setup-password">New password</label>
+      <input id="setup-password" type="password" name="password" placeholder="Choose a password" minlength="4" required />
+
+      <label class="setup-label" for="setup-password-confirm">Confirm password</label>
+      <input id="setup-password-confirm" type="password" name="password_confirm" placeholder="Re-enter password" minlength="4" required />
+
+      <button id="setup-submit-btn" type="submit">Build My Archive</button>
+      <div id="setup-progress" class="setup-progress" aria-live="polite" aria-hidden="true">
+        <div>
+          <div id="setup-progress-title" class="setup-progress-title">Processing text data...</div>
+          <div id="setup-progress-bar" class="setup-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div id="setup-progress-fill" class="setup-progress-fill"></div>
+          </div>
+          <div id="setup-progress-subtitle" class="muted">The file was ingested correctly, now creating searchable database. This process can take a long time with a large text chain.</div>
+        </div>
+      </div>
+      {% if error %}
+        <p class="bad">{{ error }}</p>
+      {% endif %}
+
+    </form>
+    <form method="post" action="/setup/reset" onsubmit="return confirm('Reset archive data and restart setup?');" class="setup-reset-inline">
+      <input type="hidden" name="confirm" value="RESET" />
+      <button type="submit" class="danger-btn">Reset Archive</button>
+    </form>
+    <form method="post" action="/stop-program" onsubmit="return confirm('Stop the local program now?');" class="setup-reset-inline">
+      <button type="submit" class="danger-btn">Stop Program</button>
+    </form>
+  </div>
+  <script>
+    (function () {
+      const form = document.getElementById('setup-form');
+      if (!form) return;
+      form.addEventListener('submit', function () {
+        const progress = document.getElementById('setup-progress');
+        const submitBtn = document.getElementById('setup-submit-btn');
+        const title = document.getElementById('setup-progress-title');
+        const subtitle = document.getElementById('setup-progress-subtitle');
+        const fill = document.getElementById('setup-progress-fill');
+        const bar = document.getElementById('setup-progress-bar');
+        if (progress) {
+          progress.classList.add('is-active');
+          progress.setAttribute('aria-hidden', 'false');
+        }
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Building...';
+        }
+        const stages = [
+          {
+            afterSec: 0,
+            targetPct: 10,
+            title: 'Validating and preparing input...',
+            subtitle: 'Checking your file format and preparing build resources.',
+          },
+          {
+            afterSec: 4,
+            targetPct: 35,
+            title: 'Building searchable message database...',
+            subtitle: 'Importing messages and creating text search indexes.',
+          },
+          {
+            afterSec: 18,
+            targetPct: 62,
+            title: 'Generating semantic index...',
+            subtitle: 'Creating embeddings for meaning-based search.',
+          },
+          {
+            afterSec: 45,
+            targetPct: 84,
+            title: 'Running signal analysis...',
+            subtitle: 'Scoring messages for Rhythm/Signals features.',
+          },
+          {
+            afterSec: 120,
+            targetPct: 93,
+            title: 'Still processing text data...',
+            subtitle: 'Large exports can take a while. If this takes longer than expected, you can retry setup and check logs/app.log.',
+          }
+        ];
+
+        let pct = 2;
+        const startedAt = Date.now();
+        const tick = function () {
+          const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+          let current = stages[0];
+          for (let i = 0; i < stages.length; i++) {
+            if (elapsedSec >= stages[i].afterSec) current = stages[i];
+          }
+
+          if (title) title.textContent = current.title;
+          if (subtitle) subtitle.textContent = current.subtitle;
+
+          const target = Math.min(94, current.targetPct);
+          if (pct < target) {
+            const delta = Math.max(0.2, (target - pct) * 0.18);
+            pct = Math.min(target, pct + delta);
+          } else if (pct < 94) {
+            pct = Math.min(94, pct + 0.08);
+          }
+
+          if (fill) fill.style.width = `${pct.toFixed(1)}%`;
+          if (bar) bar.setAttribute('aria-valuenow', `${Math.round(pct)}`);
+        };
+        tick();
+        setInterval(tick, 1000);
+      });
+    })();
+  </script>
+</body>
+</html>

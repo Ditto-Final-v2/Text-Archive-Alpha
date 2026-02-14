@@ -1,0 +1,370 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rhythm of Us - Signals</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/features" class="back">&#8592; Back</a>
+    <h1>Rhythm of Us - Signals</h1>
+    <p class="muted">Patterns over time. Higher isn't better - just different seasons.</p>
+    <div class="card">
+      <a class="result-open" href="/trends">Search your own signals &#8594;</a>
+    </div>
+
+    <div class="card signals-controls">
+      <label>Signal
+        <select id="signalSelect">
+          <option value="love" {% if initial_signal == 'love' %}selected{% endif %}>Love</option>
+          <option value="flirting" {% if initial_signal == 'flirting' %}selected{% endif %}>Flirting</option>
+          <option value="compliments" {% if initial_signal == 'compliments' %}selected{% endif %}>Compliments</option>
+          <option value="laughing" {% if initial_signal == 'laughing' %}selected{% endif %}>Laughing</option>
+          <option value="supportive" {% if initial_signal == 'supportive' %}selected{% endif %}>Supportive</option>
+          <option value="difficult" {% if initial_signal == 'difficult' %}selected{% endif %}>Difficult times</option>
+          <option value="repair" {% if initial_signal == 'repair' %}selected{% endif %}>Repair / Apology</option>
+          <option value="gratitude" {% if initial_signal == 'gratitude' %}selected{% endif %}>Gratitude</option>
+          <option value="missing" {% if initial_signal == 'missing' %}selected{% endif %}>Missing / Longing</option>
+        </select>
+      </label>
+
+      <label>Bin size
+        <select id="binSelect">
+          <option value="1" {% if initial_bin_days == 1 %}selected{% endif %}>1 day</option>
+          <option value="3" {% if initial_bin_days == 3 %}selected{% endif %}>3 days</option>
+          <option value="7" {% if initial_bin_days == 7 %}selected{% endif %}>7 days</option>
+          <option value="30" {% if initial_bin_days == 30 %}selected{% endif %}>30 days</option>
+        </select>
+      </label>
+
+      <label>Metric
+        <select id="metricSelect">
+          <option value="count" {% if initial_metric == 'count' %}selected{% endif %}>Count</option>
+          <option value="rate" {% if initial_metric == 'rate' %}selected{% endif %}>Rate</option>
+        </select>
+      </label>
+
+      <label>Series
+        <select id="seriesSelect">
+          <option value="combined" {% if initial_series == 'combined' %}selected{% endif %}>Combined</option>
+          <option value="person_a" {% if initial_series == 'person_a' %}selected{% endif %}>{{ participant_a_label }}-only</option>
+          <option value="person_b" {% if initial_series == 'person_b' %}selected{% endif %}>{{ participant_b_label }}-only</option>
+          <option value="both" {% if initial_series == 'both' %}selected{% endif %}>Both</option>
+        </select>
+      </label>
+
+      <label class="signals-check">
+        <input id="overlayCheck" type="checkbox" {% if initial_overlay %}checked{% endif %}>
+        Show total message volume overlay
+      </label>
+    </div>
+
+    <div class="card chart-card">
+      <canvas id="signalsChart" height="120"></canvas>
+    </div>
+
+    <div class="card">
+      <h3>Top Signal Highlights</h3>
+      <p class="muted">Messages with the strongest match to the selected signal.</p>
+      <div id="signalHighlights">
+        <p class="muted">Loading highlights...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const signalSelect = document.getElementById('signalSelect');
+    const binSelect = document.getElementById('binSelect');
+    const metricSelect = document.getElementById('metricSelect');
+    const seriesSelect = document.getElementById('seriesSelect');
+    const overlayCheck = document.getElementById('overlayCheck');
+    const signalHighlights = document.getElementById('signalHighlights');
+
+    let chart = null;
+    let currentData = null;
+    let visibleMonthLabelIndexes = new Set();
+    const forceLastMonthLabelPlugin = {
+      id: 'forceLastMonthLabel',
+      afterDraw(chartInstance) {
+        const xScale = chartInstance.scales && chartInstance.scales.x;
+        if (!xScale || !currentData || !currentData.bins || currentData.bins.length === 0) return;
+        const lastIdx = currentData.bins.length - 1;
+        const hasLastTick = (xScale.ticks || []).some(t => Number(t.value) === lastIdx);
+        if (hasLastTick) return;
+
+        const raw = chartInstance.data.labels[lastIdx];
+        const label = formatMonthYear(raw);
+        const ctx = chartInstance.ctx;
+        const xRaw = xScale.getPixelForValue(lastIdx);
+        const left = chartInstance.chartArea.left + 20;
+        const right = chartInstance.chartArea.right - 2;
+        const x = Math.max(left, Math.min(right, xRaw));
+        const y = xScale.bottom + 14;
+
+        ctx.save();
+        ctx.fillStyle = '#b7bed8';
+        ctx.font = '11px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x, y);
+        ctx.restore();
+      }
+    };
+
+    function valueForBin(bin, metric, series) {
+      if (metric === 'rate') {
+        if (series === 'person_a') return bin.person_a_rate;
+        if (series === 'person_b') return bin.person_b_rate;
+        return bin.combined_rate;
+      }
+      if (series === 'person_a') return bin.person_a_value;
+      if (series === 'person_b') return bin.person_b_value;
+      return bin.combined_value;
+    }
+
+    function labelsForBins(bins) {
+      return bins.map(b => b.label);
+    }
+
+    function formatMonthYear(label) {
+      const d = new Date(`${label}T00:00:00`);
+      if (Number.isNaN(d.getTime())) return label;
+      return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
+
+    function computeVisibleMonthLabelIndexes(bins) {
+      const monthStartIdx = [];
+      let prev = '';
+      for (let i = 0; i < bins.length; i++) {
+        const key = formatMonthYear(bins[i].label);
+        if (key !== prev) monthStartIdx.push(i);
+        prev = key;
+      }
+      if (monthStartIdx.length === 0) return new Set();
+
+      const maxLabels = 10;
+      const step = Math.max(1, Math.ceil(monthStartIdx.length / maxLabels));
+      const keepList = [];
+      for (let i = 0; i < monthStartIdx.length; i += step) {
+        keepList.push(monthStartIdx[i]);
+      }
+      const lastIdx = monthStartIdx[monthStartIdx.length - 1];
+      if (keepList.length === 0 || keepList[keepList.length - 1] !== lastIdx) {
+        const minGap = Math.max(1, Math.floor(step * 0.8));
+        if (keepList.length > 0 && (lastIdx - keepList[keepList.length - 1]) < minGap) {
+          keepList[keepList.length - 1] = lastIdx;
+        } else {
+          keepList.push(lastIdx);
+        }
+      }
+      return new Set(keepList);
+    }
+
+    function makeDatasets(data) {
+      const metric = metricSelect.value;
+      const series = seriesSelect.value;
+      const bins = data.bins || [];
+      const datasets = [];
+
+      if (series === 'both') {
+        datasets.push({
+          label: metric === 'rate' ? '{{ participant_a_label }} rate' : '{{ participant_a_label }}',
+          data: bins.map(b => metric === 'rate' ? b.person_a_rate : b.person_a_value),
+          borderColor: '#9b8ad2',
+          backgroundColor: 'rgba(155, 138, 210, 0.25)',
+          tension: 0.25,
+          pointRadius: 2,
+          pointHoverRadius: 4,
+        });
+        datasets.push({
+          label: metric === 'rate' ? '{{ participant_b_label }} rate' : '{{ participant_b_label }}',
+          data: bins.map(b => metric === 'rate' ? b.person_b_rate : b.person_b_value),
+          borderColor: '#b59ade',
+          backgroundColor: 'rgba(181, 154, 222, 0.22)',
+          tension: 0.25,
+          pointRadius: 2,
+          pointHoverRadius: 4,
+        });
+      } else {
+        const seriesLabel = series === 'person_a'
+          ? '{{ participant_a_label }}'
+          : (series === 'person_b' ? '{{ participant_b_label }}' : 'combined');
+        datasets.push({
+          label: metric === 'rate' ? `${seriesLabel} rate` : `${seriesLabel}`,
+          data: bins.map(b => valueForBin(b, metric, series)),
+          borderColor: '#a58fdc',
+          backgroundColor: 'rgba(165, 143, 220, 0.22)',
+          tension: 0.25,
+          pointRadius: 2,
+          pointHoverRadius: 4,
+        });
+      }
+
+      if (overlayCheck.checked) {
+        datasets.push({
+          label: 'Total messages',
+          data: bins.map(b => b.total_msgs),
+          borderColor: 'rgba(196, 183, 229, 0.45)',
+          borderDash: [4, 4],
+          yAxisID: 'y2',
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          tension: 0.2,
+        });
+      }
+
+      return datasets;
+    }
+
+    function tooltipFooter(items) {
+      if (!currentData || !currentData.bins || items.length === 0) return '';
+      const idx = items[0].dataIndex;
+      const b = currentData.bins[idx];
+      return [
+        `Range: ${new Date(b.start_ts * 1000).toLocaleString()} to ${new Date(b.end_ts * 1000).toLocaleString()}`,
+        `Combined: ${b.combined_value} (${(b.combined_rate * 100).toFixed(1)}%)`,
+        `{{ participant_a_label }}: ${b.person_a_value} (${(b.person_a_rate * 100).toFixed(1)}%)`,
+        `{{ participant_b_label }}: ${b.person_b_value} (${(b.person_b_rate * 100).toFixed(1)}%)`,
+        `Total messages: ${b.total_msgs}`,
+        `Avg words/msg: ${(b.avg_word_count || 0).toFixed(1)}`
+      ].join('\n');
+    }
+
+    function renderChart(data) {
+      currentData = data;
+      const ctx = document.getElementById('signalsChart');
+      const bins = data.bins || [];
+      visibleMonthLabelIndexes = computeVisibleMonthLabelIndexes(bins);
+
+      if (chart) chart.destroy();
+
+      chart = new Chart(ctx, {
+        plugins: [forceLastMonthLabelPlugin],
+        type: 'line',
+        data: {
+          labels: labelsForBins(bins),
+          datasets: makeDatasets(data),
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: '#d6dbef' } },
+            tooltip: {
+              callbacks: {
+                footer: tooltipFooter,
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: {
+                color: '#b7bed8',
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 10,
+                callback: function(value, index) {
+                  const raw = this.getLabelForValue(value);
+                  return formatMonthYear(raw);
+                }
+              },
+              grid: { color: 'rgba(162,173,205,0.14)' }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: {
+                color: '#b7bed8',
+                callback: function(value) {
+                  if (metricSelect.value === 'rate') {
+                    const pct = Number(value) * 100;
+                    const rounded1 = Math.round(pct * 10) / 10;
+                    const isWhole = Math.abs(rounded1 - Math.round(rounded1)) < 1e-9;
+                    return `${isWhole ? Math.round(rounded1) : rounded1.toFixed(1)}%`;
+                  }
+                  return value;
+                }
+              },
+              grid: { color: 'rgba(162,173,205,0.16)' }
+            },
+            y2: {
+              beginAtZero: true,
+              position: 'right',
+              display: overlayCheck.checked,
+              ticks: { color: '#96a3cb' },
+              grid: { drawOnChartArea: false }
+            }
+          },
+          onClick: (_, elems) => {
+            if (!elems || elems.length === 0 || !currentData || !currentData.bins) return;
+            const idx = elems[0].index;
+            const b = currentData.bins[idx];
+            const params = new URLSearchParams({
+              signal: signalSelect.value,
+              start_ts: String(b.start_ts),
+              end_ts: String(b.end_ts),
+              threshold: String(currentData.threshold),
+              counted_only: '1',
+              sort: 'score_desc',
+              bin_days: binSelect.value,
+              metric: metricSelect.value,
+              series: seriesSelect.value,
+              overlay: overlayCheck.checked ? '1' : '0',
+            });
+            window.location.href = `/rhythm/signals/window?${params.toString()}`;
+          }
+        }
+      });
+    }
+
+    async function refresh() {
+      const params = new URLSearchParams({
+        signal: signalSelect.value,
+        bin_days: binSelect.value,
+        metric: metricSelect.value,
+        series: seriesSelect.value,
+        overlay: overlayCheck.checked ? '1' : '0',
+        threshold_mode: 'default',
+      });
+
+      const resp = await fetch(`/rhythm/signals/data?${params.toString()}`, { credentials: 'same-origin' });
+      const data = await resp.json();
+      if (!resp.ok) {
+        alert(data.error || 'Failed to load signal timeline');
+        return;
+      }
+      renderChart(data);
+
+      const hp = new URLSearchParams({
+        signal: signalSelect.value,
+        series: seriesSelect.value,
+        bin_days: binSelect.value,
+        metric: metricSelect.value,
+        overlay: overlayCheck.checked ? '1' : '0',
+        limit: '50',
+      });
+      const hresp = await fetch(`/rhythm/signals/highlights?${hp.toString()}`, { credentials: 'same-origin' });
+      const hhtml = await hresp.text();
+      if (hresp.ok) {
+        signalHighlights.innerHTML = hhtml;
+      } else {
+        signalHighlights.innerHTML = '<p class="muted">Unable to load highlights.</p>';
+      }
+    }
+
+    [signalSelect, binSelect, metricSelect, seriesSelect, overlayCheck].forEach(el => {
+      el.addEventListener('change', refresh);
+    });
+
+    refresh();
+  </script>
+</body>
+</html>
+
+
+
+
+

@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Signals Window</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <a href="/rhythm/signals?{{ back_query }}" class="back">&#8592; Back to Signals</a>
+    <h2>{{ signal|replace('_', ' ')|title }} Window</h2>
+    <p class="muted">{{ date_range_label }}</p>
+    <p class="muted">{{ period_label }}</p>
+
+    <div class="card rhythm-day-summary">
+      <div><strong>{{ summary.total_msgs }}</strong><span class="muted">messages</span></div>
+      <div><strong>{{ summary.counted_msgs }}</strong><span class="muted">counted @ {{ '%.2f'|format(threshold) }}</span></div>
+    </div>
+
+    <div class="card signals-controls">
+      <label>View
+        <select id="countedOnly">
+          <option value="1" {% if counted_only %}selected{% endif %}>Signal Messages</option>
+          <option value="0" {% if not counted_only %}selected{% endif %}>All messages</option>
+        </select>
+      </label>
+      <label>Sort
+        <select id="sortBy">
+          <option value="time" {% if sort == 'time' %}selected{% endif %}>Time</option>
+          <option value="score_desc" {% if sort == 'score_desc' %}selected{% endif %}>Match %</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="card">
+      <h3>Messages</h3>
+      {% if messages|length == 0 %}
+        <p class="muted">No messages in this window.</p>
+      {% else %}
+        <div class="signals-msg-list">
+          {% for m in messages %}
+            <div class="signals-msg sender-{{ m.sender }} {% if m.counted %}counted{% endif %}">
+              <div class="signals-msg-head">
+                <span>
+                  {{ m.display_date }} {{ m.display_time }}
+                  &middot;
+                  <span class="signals-sender sender-{{ m.sender }}">
+                    {% if m.sender == 'person_a' %}{{ participant_a_label }}{% elif m.sender == 'person_b' %}{{ participant_b_label }}{% else %}Unknown{% endif %}
+                  </span>
+                  &middot; <span class="msg-id">#{{ m.id }}</span>
+                </span>
+                <span class="signals-score">{{ '%.3f'|format(m.signal_score) }}</span>
+              </div>
+              <div class="signals-body">{{ m.body }}</div>
+              {% if m.top_labels|length > 0 %}
+                <div class="signals-labels">
+                  {% for lab in m.top_labels %}
+                    <span class="signals-label-chip">{{ lab.label }} {{ (lab.score * 100)|round(0, 'common')|int }}%</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              <a class="result-open" href="{{ m.chat_href }}">Open in chat &#8594;</a>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+    const countedOnly = document.getElementById('countedOnly');
+    const sortBy = document.getElementById('sortBy');
+
+    function refresh() {
+      const params = new URLSearchParams({
+        signal: '{{ signal }}',
+        start_ts: '{{ start_ts }}',
+        end_ts: '{{ end_ts }}',
+        threshold: '{{ threshold }}',
+        counted_only: countedOnly.value,
+        sort: sortBy.value,
+        bin_days: '{{ bin_days }}',
+        metric: '{{ metric }}',
+        series: '{{ series }}',
+        overlay: '{{ overlay }}',
+      });
+      window.location.href = `/rhythm/signals/window?${params.toString()}`;
+    }
+
+    countedOnly.addEventListener('change', refresh);
+    sortBy.addEventListener('change', refresh);
+  </script>
+</body>
+</html>
+
+

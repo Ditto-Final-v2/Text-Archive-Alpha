@@ -1,0 +1,491 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Text Archive</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="/static/image_viewer.js"></script>
+</head>
+<body class="home-page">
+  <div class="wrap">
+    <div class="home-header">
+      <div>
+        <h1 class="home-main-title">Happy Valentine's Day &lt;3</h1>
+      </div>
+    </div>
+
+    <div class="card love-note-card">
+      <h3 class="love-note-title">My gift to you and your partner</h3>
+      <p class="love-note-body">
+        Thank you for taking the time to download this app. I built it because rereading old conversations with my partner has always brought me joy. My hope is that this space helps you rediscover moments you&rsquo;d forgotten and get lost in memories that were almost forgotten.<br><br>
+        If something makes you smile, consider bookmarking it and sharing it with your partner. I reccomend starting with some of the features at the bottom of the page to provide inspiration for searches.<br><br>
+        After spending time exporing and sharing this with your partner, I&rsquo;d be grateful if you filled out a short survey to share your experience.<br><br>
+        Happy searching!
+      </p>
+      <a class="btn survey-link-btn" href="#" target="_blank" rel="noopener noreferrer">Open Survey Link</a>
+    </div>
+
+    {% if not authed %}
+      <form method="post" action="/login" class="card">
+        <p>Enter password:</p>
+        <input type="password" name="password" placeholder="Password" />
+        <button type="submit">Login</button>
+        {% if request.query_params.get("bad") %}
+          <p class="bad">Hint: How much I love you</p>
+        {% endif %}
+      </form>
+    {% else %}
+      <div class="home-authed-layout">
+      <div class="card search-hero-card home-search-card">
+        <form id="search-form" class="search-google" method="get" action="/search" autocomplete="off">
+          <div class="search-google-main">
+            <input id="search-query-input" name="q" type="text" placeholder='Explore Our Memories' autocomplete="off" />
+          </div>
+          <div class="search-google-actions">
+            <select name="mode">
+              <option value="experiment" selected>Default</option>
+              <option value="semantic_first">Semantic First</option>
+            </select>
+            <button type="submit">Search</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="home-search-loading" class="search-loading home-search-loading" aria-hidden="true">
+        <span class="search-spinner" aria-hidden="true"></span>
+        <span class="search-loading-text">Searching<span class="loading-dots" aria-hidden="true"></span></span>
+      </div>
+
+      <h1 class="home-section-title">Explore Features</h1>
+
+      <div class="card feature-hub-card cherished-card">
+        <h3 class="feature-hub-title">Cherished Memories</h3>
+        <div class="cherished-grid">
+          <div class="cherished-tile feature-preview cherished-bookmarks-tile">
+            <div class="feature-preview-head">
+              <strong>Bookmark Folders</strong>
+            </div>
+            <form id="bookmark-category-form" hx-post="/bookmarks/categories"
+                    hx-target="#bookmark-folders"
+                    hx-swap="outerHTML"
+                    autocomplete="off">
+                <input type="hidden" name="icon_key" id="bookmark-icon-key" value="{{ default_icon_key }}">
+                <div class="bookmark-create-row">
+                  <input id="bookmark-name-input" name="name" placeholder="Curate Memories" autocomplete="off" required />
+                  <button id="bookmark-open-emoji" type="button">Add</button>
+                </div>
+            </form>
+
+            <div id="bookmark-folders"
+                hx-get="/bookmarks/folders"
+                hx-trigger="load"
+                hx-swap="outerHTML">
+                <p class="muted">Loading folders&hellip;</p>
+            </div>
+          </div>
+
+          <a class="cherished-tile feature-preview cherished-on-this-day-link" href="/on-this-day">
+            <div class="feature-preview-head">
+              <strong>1 year ago today</strong>
+              {% if feature_previews.on_this_day_1y %}
+                <span>{{ feature_previews.on_this_day_1y.subtitle_date }}</span>
+              {% endif %}
+            </div>
+            {% if feature_previews.on_this_day_1y %}
+              <div class="cherished-on-this-day">
+                {% for m in feature_previews.on_this_day_1y.messages %}
+                  {% set who = m.sender if m.sender in ['person_a','person_b'] else 'person_b' %}
+                  <div class="feature-mini-msg {{ who }} {% if m.is_center %}center{% endif %}">
+                    <div class="feature-mini-bubble">{{ (m.body or '') | replace('\r', ' ') | replace('\n', ' ') | replace('\t', ' ') }}</div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p class="muted">No messages found for this date one year ago.</p>
+            {% endif %}
+          </a>
+        </div>
+      </div>
+
+      <div class="card feature-hub-card explore-story-card">
+        <h3 class="feature-hub-title">Explore Our Story</h3>
+        <div class="feature-preview-grid">
+          <a class="feature-preview" href="/rhythm{% if feature_previews.rhythm_month %}?year={{ feature_previews.rhythm_month.year }}{% endif %}">
+            <div class="feature-preview-head">
+              <strong>Rhythm of Us</strong>
+            </div>
+            {% if feature_previews.rhythm_month %}
+              <div class="feature-mini-weekdays">
+                {% for wd in feature_previews.rhythm_month.weekday_labels %}
+                  <span>{{ wd }}</span>
+                {% endfor %}
+              </div>
+              <div class="feature-mini-month-grid">
+                {% for cell in feature_previews.rhythm_month.cells %}
+                  {% if cell.in_month %}
+                    <span class="feature-mini-day lvl-{{ cell.level }}" title="{{ cell.day }}: {{ cell.count }} messages">{{ cell.day }}</span>
+                  {% else %}
+                    <span class="feature-mini-day out"></span>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              <div class="feature-preview-meta feature-rhythm-month">{{ feature_previews.rhythm_month.month_label }}</div>
+              <div class="feature-preview-meta feature-rhythm-sub">Our busiest month</div>
+            {% else %}
+              <div class="feature-preview-empty">No rhythm data yet.</div>
+            {% endif %}
+          </a>
+
+          <a class="feature-preview" href="/rhythm/signals?signal=love&bin_days=30&metric=rate&series=combined&overlay=0">
+            <div class="feature-preview-head">
+              <strong>Signals Timeline</strong>
+            </div>
+            {% if feature_previews.signals_love %}
+              <div class="feature-signals-title">Times we expressed love</div>
+              <svg class="feature-mini-line" viewBox="0 0 {{ feature_previews.signals_love.svg_width }} {{ feature_previews.signals_love.svg_height }}" preserveAspectRatio="none" aria-hidden="true">
+                <polyline points="{{ feature_previews.signals_love.polyline_points }}" />
+              </svg>
+              <div class="feature-signals-axis">
+                <span>{{ feature_previews.signals_love.start_pretty }}</span>
+                <span>{{ feature_previews.signals_love.end_pretty }}</span>
+              </div>
+              {% if feature_previews.signals_love_top %}
+                {% set top = feature_previews.signals_love_top %}
+                {% set who = top.sender if top.sender in ['person_a','person_b'] else 'person_b' %}
+                <div class="feature-signals-top {{ who }}">
+                  <div class="feature-signals-top-body">{{ (top.body or '') | replace('\r', ' ') | replace('\n', ' ') | replace('\t', ' ') }}</div>
+                </div>
+              {% endif %}
+            {% else %}
+              <div class="feature-preview-empty">No signal scores yet.</div>
+            {% endif %}
+          </a>
+
+          <a class="feature-preview feature-preview-laugh-home" href="/laughs">
+            <div class="feature-preview-head">
+              <strong>Times We Laughed Together</strong>
+            </div>
+            {% if feature_previews.laugh_batch %}
+              <div class="feature-mini-laugh">
+                {% for m in feature_previews.laugh_batch.messages %}
+                  {% set who = m.sender if m.sender in ['person_a','person_b'] else 'person_b' %}
+                  <div class="feature-mini-msg {{ who }} {% if m.is_center %}center{% endif %}">
+                    <div class="feature-mini-bubble">{{ (m.body or '') | replace('\r', ' ') | replace('\n', ' ') | replace('\t', ' ') }}</div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="feature-preview-empty">No laugh moments found yet.</div>
+            {% endif %}
+          </a>
+        </div>
+        <a class="feature-more-btn" href="/features">Explore more features</a>
+      </div>
+
+      <div id="emoji-picker-modal" class="modal-root" style="display:none;" aria-hidden="true">
+        <div class="modal-backdrop" data-emoji-close="1"></div>
+        <div class="modal emoji-modal">
+          <div class="modal-header">
+            <span class="modal-title">Pick a folder emoji</span>
+            <button type="button" class="modal-x" data-emoji-close="1" aria-label="Close">&times;</button>
+          </div>
+          <div class="emoji-grid">
+            {% for icon in icon_options %}
+              <button type="button"
+                      class="emoji-btn"
+                      data-emoji-key="{{ icon.key }}"
+                      title="{{ icon.label }}"
+                      aria-label="{{ icon.label }}">{{ icon.entity | safe }}</button>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <form method="post" action="/logout" class="logout logout-bottom">
+        <button type="submit">Logout</button>
+      </form>
+      <form method="post" action="/stop-program" class="logout logout-bottom" onsubmit="return confirm('Stop the local program now?');">
+        <button type="submit">Stop Program</button>
+      </form>
+      </div>
+    {% endif %}
+  </div>
+  <script>
+    (function () {
+      const searchForm = document.getElementById("search-form");
+      const searchInput = document.getElementById("search-query-input");
+      const searchModeEl = searchForm ? searchForm.querySelector('select[name="mode"]') : null;
+      const homeSearchLoading = document.getElementById("home-search-loading");
+      const SEARCH_MODE_PREF_KEY = "ta_search_mode_pref";
+      const HOME_SEARCH_DEFAULT_PLACEHOLDER = "Explore Our Memories";
+      const HOME_SEARCH_EXAMPLE_PROMPTS = [
+        "Times we talked about change",
+        "Times we talked about pets",
+        "Messages where we supported each other",
+        "Flirty or sexy texts",
+        "Tough times",
+        "Talking about our day",
+        "Moments we laughed really hard",
+        "Times we talked about moving",
+        "Messages about future plans",
+        "Times we said I love you",
+        "Conversations about family",
+        "Messages about work stress",
+        "Times we reassured each other",
+        "Messages about being proud",
+        "Times we talked about money",
+        "Conversations about travel",
+        "Texts about cooking or food",
+        "Times we talked about being tired",
+        "Messages about feeling anxious",
+        "Conversations about friends",
+        "Messages about missing each other",
+        "Times we talked about boundaries",
+        "Messages about celebrating wins",
+        "Times we resolved an argument",
+        "Messages about intimacy",
+        "Conversations about goals",
+        "Times we talked late at night",
+        "Messages about home life",
+        "Moments we were playful",
+        "Times we checked in emotionally",
+      ];
+      const bookmarkForm = document.getElementById("bookmark-category-form");
+      const bookmarkNameInput = document.getElementById("bookmark-name-input");
+      const bookmarkIconKeyInput = document.getElementById("bookmark-icon-key");
+      const bookmarkOpenEmojiBtn = document.getElementById("bookmark-open-emoji");
+      const emojiPickerModal = document.getElementById("emoji-picker-modal");
+      const signalsPreviewTile = document.querySelector('.feature-hub-card .feature-preview[href^="/rhythm/signals"]');
+      const cherishedCard = document.querySelector(".cherished-card");
+      const cherishedBookmarkTile = document.querySelector(".cherished-bookmarks-tile");
+      const cherishedOnThisDayTile = document.querySelector(".cherished-on-this-day-link");
+
+      if (searchForm && searchInput) {
+        const validModes = new Set(["semantic_first", "experiment"]);
+        const savedMode = localStorage.getItem(SEARCH_MODE_PREF_KEY);
+        if (searchModeEl && savedMode && validModes.has(savedMode)) {
+          searchModeEl.value = savedMode;
+        }
+        if (searchModeEl) {
+          searchModeEl.addEventListener("change", function () {
+            localStorage.setItem(SEARCH_MODE_PREF_KEY, searchModeEl.value || "experiment");
+          });
+        }
+
+        let lastPromptIndex = -1;
+        let promptLockedForFocus = false;
+        const setRandomPromptPlaceholder = function () {
+          if (!HOME_SEARCH_EXAMPLE_PROMPTS.length) return;
+          let idx = Math.floor(Math.random() * HOME_SEARCH_EXAMPLE_PROMPTS.length);
+          if (HOME_SEARCH_EXAMPLE_PROMPTS.length > 1 && idx === lastPromptIndex) {
+            idx = (idx + 1) % HOME_SEARCH_EXAMPLE_PROMPTS.length;
+          }
+          lastPromptIndex = idx;
+          searchInput.placeholder = `"${HOME_SEARCH_EXAMPLE_PROMPTS[idx]}"`;
+        };
+
+        searchInput.addEventListener("focus", function () {
+          if (promptLockedForFocus) return;
+          promptLockedForFocus = true;
+          setRandomPromptPlaceholder();
+        });
+        searchInput.addEventListener("blur", function () {
+          promptLockedForFocus = false;
+          if (!(searchInput.value || "").trim()) {
+            searchInput.placeholder = HOME_SEARCH_DEFAULT_PLACEHOLDER;
+          }
+        });
+
+        searchInput.addEventListener("keydown", function (event) {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            searchForm.requestSubmit();
+          }
+        });
+
+        searchForm.addEventListener("submit", function (event) {
+          if (searchModeEl) {
+            localStorage.setItem(SEARCH_MODE_PREF_KEY, searchModeEl.value || "experiment");
+          }
+          const raw = ((searchInput && searchInput.value) || "").trim();
+          const idMatch = raw.match(/^[#\uFF03\uFE5F]\s*(\d+)\s*$/);
+          if (idMatch) {
+            event.preventDefault();
+            const mode = (searchModeEl && searchModeEl.value) ? searchModeEl.value : "experiment";
+            const target = `/search?q=${encodeURIComponent("#" + idMatch[1])}&mode=${encodeURIComponent(mode)}`;
+            if (homeSearchLoading) {
+              homeSearchLoading.classList.add("is-visible");
+              homeSearchLoading.setAttribute("aria-hidden", "false");
+            }
+            window.location.href = target;
+            return;
+          }
+          if (!homeSearchLoading) return;
+          homeSearchLoading.classList.add("is-visible");
+          homeSearchLoading.setAttribute("aria-hidden", "false");
+        });
+      }
+
+      function closeEmojiModal() {
+        if (!emojiPickerModal) return;
+        emojiPickerModal.style.display = "none";
+        emojiPickerModal.setAttribute("aria-hidden", "true");
+      }
+
+      function openEmojiModal() {
+        if (!emojiPickerModal) return;
+        emojiPickerModal.style.display = "block";
+        emojiPickerModal.setAttribute("aria-hidden", "false");
+      }
+
+      if (bookmarkOpenEmojiBtn && bookmarkNameInput) {
+        bookmarkOpenEmojiBtn.addEventListener("click", function () {
+          const name = (bookmarkNameInput.value || "").trim();
+          if (!name) {
+            bookmarkNameInput.focus();
+            return;
+          }
+          openEmojiModal();
+        });
+      }
+
+      if (emojiPickerModal) {
+        emojiPickerModal.addEventListener("click", function (event) {
+          const closeTarget = event.target.closest("[data-emoji-close='1']");
+          if (closeTarget) {
+            closeEmojiModal();
+            return;
+          }
+          const emojiBtn = event.target.closest(".emoji-btn");
+          if (!emojiBtn) return;
+          const key = emojiBtn.getAttribute("data-emoji-key");
+          if (bookmarkIconKeyInput && key) {
+            bookmarkIconKeyInput.value = key;
+          }
+          closeEmojiModal();
+          if (bookmarkForm) {
+            bookmarkForm.requestSubmit();
+          }
+        });
+      }
+
+      function syncCherishedTileHeights() {
+        if (!signalsPreviewTile || !cherishedBookmarkTile || !cherishedOnThisDayTile) return;
+        const target = Math.max(0, Math.round(signalsPreviewTile.getBoundingClientRect().height));
+        if (target <= 0) return;
+        cherishedBookmarkTile.style.height = `${target}px`;
+        cherishedOnThisDayTile.style.height = `${target}px`;
+        if (cherishedCard) {
+          cherishedCard.style.minHeight = "";
+        }
+      }
+
+      function fitHomepageMiniContextText() {
+        const groups = document.querySelectorAll(
+          ".feature-preview-laugh-home .feature-mini-laugh, .cherished-on-this-day-link .cherished-on-this-day"
+        );
+        const normalizeSpaces = (txt) => (txt || "").replace(/\s+/g, " ").trim();
+        const truncateText = (txt, limit) => {
+          const t = normalizeSpaces(txt);
+          if (!t || t.length <= limit) return t;
+          return `${t.slice(0, limit).trimEnd()}...`;
+        };
+        groups.forEach(function (group) {
+          const bubbles = Array.from(group.querySelectorAll(".feature-mini-bubble"));
+          bubbles.forEach(function (b) {
+            if (!b.dataset.fullText) {
+              b.dataset.fullText = normalizeSpaces(b.textContent || "");
+            }
+          });
+          const setBubbleTextLimit = (limit) => {
+            bubbles.forEach(function (b) {
+              b.textContent = truncateText(b.dataset.fullText || "", limit);
+            });
+          };
+
+          group.classList.remove("mini-text-sm", "mini-text-xs", "mini-tight");
+          const fits = () => group.scrollHeight <= (group.clientHeight + 1);
+          const isOnThisDay = group.classList.contains("cherished-on-this-day");
+          const limits = isOnThisDay ? [160, 136, 116, 94] : [110, 90, 72, 58];
+
+          setBubbleTextLimit(limits[0]);
+          if (!fits()) {
+            group.classList.add("mini-text-sm");
+            setBubbleTextLimit(limits[1]);
+          }
+          if (!fits()) {
+            group.classList.add("mini-text-xs");
+            setBubbleTextLimit(limits[2]);
+          }
+          if (!fits()) {
+            group.classList.add("mini-tight");
+            setBubbleTextLimit(limits[3]);
+          }
+        });
+
+        const signalBody = document.querySelector(".feature-signals-top-body");
+        const signalBox = signalBody ? signalBody.closest(".feature-signals-top") : null;
+        if (signalBody && signalBox) {
+          const normalizeSpaces = (txt) => (txt || "").replace(/\s+/g, " ").trim();
+          const truncateText = (txt, limit) => {
+            const t = normalizeSpaces(txt);
+            if (!t || t.length <= limit) return t;
+            return `${t.slice(0, limit).trimEnd()}...`;
+          };
+          if (!signalBody.dataset.fullText) {
+            signalBody.dataset.fullText = normalizeSpaces(signalBody.textContent || "");
+          }
+          const full = signalBody.dataset.fullText || "";
+          const fitsSignal = () => signalBox.scrollHeight <= (signalBox.clientHeight + 1);
+          const limits = [260, 220, 190, 165, 140, 120, 100, 84];
+          signalBody.textContent = full;
+          for (const lim of limits) {
+            if (fitsSignal()) break;
+            signalBody.textContent = truncateText(full, lim);
+          }
+        }
+      }
+
+      function resetHomeForms() {
+        ["search-form", "bookmark-category-form"].forEach(function (id) {
+          const form = document.getElementById(id);
+          if (form) {
+            form.reset();
+          }
+        });
+        if (bookmarkIconKeyInput) {
+          bookmarkIconKeyInput.value = "{{ default_icon_key }}";
+        }
+        closeEmojiModal();
+        if (searchInput) {
+          searchInput.value = "";
+          searchInput.placeholder = HOME_SEARCH_DEFAULT_PLACEHOLDER;
+        }
+        if (searchModeEl) {
+          const savedMode = localStorage.getItem(SEARCH_MODE_PREF_KEY);
+          if (savedMode) {
+            searchModeEl.value = savedMode;
+          }
+        }
+        syncCherishedTileHeights();
+        requestAnimationFrame(fitHomepageMiniContextText);
+      }
+
+      window.addEventListener("pageshow", resetHomeForms);
+      window.addEventListener("resize", function () {
+        syncCherishedTileHeights();
+        fitHomepageMiniContextText();
+      }, { passive: true });
+      requestAnimationFrame(function () {
+        syncCherishedTileHeights();
+        fitHomepageMiniContextText();
+      });
+    })();
+  </script>
+</body>
+</html>
+
+
+

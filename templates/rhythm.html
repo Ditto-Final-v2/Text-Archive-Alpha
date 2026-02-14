@@ -1,0 +1,278 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rhythm of Us</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <a href="/features" class="back">&#8592; Back</a>
+    <h1>Rhythm of Us</h1>
+    <p class="muted">A gentle view of how we talked over time. Darker = more messages. Not better, not worse.</p>
+
+    <div class="card">
+      <div class="rhythm-controls">
+        <h3>Calendar Rhythm</h3>
+        <label for="yearSelect">Year</label>
+        <select id="yearSelect">
+          {% for y in years %}
+            <option value="{{ y }}" {% if y == default_year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="calendarLegend" class="rhythm-legend"></div>
+      <div id="calendarWrap" class="rhythm-calendar-wrap"></div>
+    </div>
+
+    <div class="card">
+      <h3>Hour of Day by Weekday</h3>
+      <div id="hourLegend" class="rhythm-legend"></div>
+      <div id="hourGrid" class="rhythm-hour-grid"></div>
+    </div>
+  </div>
+
+  <script>
+    const RHYTHM_YEAR_KEY = 'ta_rhythm_selected_year';
+    const yearSelect = document.getElementById('yearSelect');
+    const calendarWrap = document.getElementById('calendarWrap');
+    const hourGrid = document.getElementById('hourGrid');
+    const calendarLegend = document.getElementById('calendarLegend');
+    const hourLegend = document.getElementById('hourLegend');
+
+    function validYearValue(y) {
+      if (!y) return null;
+      const ok = Array.from(yearSelect.options).some(opt => String(opt.value) === String(y));
+      return ok ? String(y) : null;
+    }
+
+    function currentUrlYear() {
+      const params = new URLSearchParams(window.location.search || '');
+      return validYearValue(params.get('year'));
+    }
+
+    function syncYearInUrl(year) {
+      const params = new URLSearchParams(window.location.search || '');
+      params.set('year', String(year));
+      const next = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, '', next);
+    }
+
+    function pad2(n) {
+      return String(n).padStart(2, '0');
+    }
+
+    function dateKey(d) {
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    }
+
+    function ordinalSuffix(day) {
+      if (day >= 11 && day <= 13) return 'th';
+      const r = day % 10;
+      if (r === 1) return 'st';
+      if (r === 2) return 'nd';
+      if (r === 3) return 'rd';
+      return 'th';
+    }
+
+    function prettyDate(d) {
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${months[d.getMonth()]} ${d.getDate()}${ordinalSuffix(d.getDate())} ${d.getFullYear()}`;
+    }
+
+    function levelFor(value, maxValue) {
+      if (!value || value <= 0 || maxValue <= 0) return 0;
+      const ratio = value / maxValue;
+      if (ratio <= 0.20) return 1;
+      if (ratio <= 0.40) return 2;
+      if (ratio <= 0.60) return 3;
+      if (ratio <= 0.80) return 4;
+      return 5;
+    }
+
+    function renderLegend(el) {
+      el.innerHTML = '';
+      const labelLow = document.createElement('span');
+      labelLow.className = 'muted';
+      labelLow.textContent = 'Less';
+      el.appendChild(labelLow);
+
+      for (let i = 0; i <= 5; i++) {
+        const sw = document.createElement('span');
+        sw.className = `rhythm-cell lvl-${i}`;
+        el.appendChild(sw);
+      }
+
+      const labelHigh = document.createElement('span');
+      labelHigh.className = 'muted';
+      labelHigh.textContent = 'More';
+      el.appendChild(labelHigh);
+    }
+
+    function renderCalendar(year, days) {
+      const map = new Map(days.map(d => [d.date, d]));
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const wrap = document.createElement('div');
+      wrap.className = 'rhythm-calendar-months';
+
+      for (let m = 0; m < 12; m++) {
+        const monthCard = document.createElement('div');
+        monthCard.className = 'rhythm-month-card';
+
+        const monthTitle = document.createElement('h4');
+        monthTitle.className = 'rhythm-month-title';
+        monthTitle.textContent = `${monthNames[m]} ${year}`;
+        monthCard.appendChild(monthTitle);
+
+        const daysInMonth = new Date(year, m + 1, 0).getDate();
+        const monthDayStats = [];
+        let monthTotal = 0;
+        let monthMax = 0;
+        for (let day = 1; day <= daysInMonth; day++) {
+          const key = `${year}-${pad2(m + 1)}-${pad2(day)}`;
+          const stats = map.get(key) || null;
+          monthDayStats[day] = stats;
+          const msgCount = stats ? (stats.msg_count || 0) : 0;
+          monthTotal += msgCount;
+          monthMax = Math.max(monthMax, msgCount);
+        }
+
+        const monthMeta = document.createElement('div');
+        monthMeta.className = 'rhythm-month-meta';
+        monthMeta.textContent = `${monthTotal} messages`;
+        monthCard.appendChild(monthMeta);
+
+        const weekdayHead = document.createElement('div');
+        weekdayHead.className = 'rhythm-weekday-head';
+        for (const wd of weekdayNames) {
+          const wdCell = document.createElement('span');
+          wdCell.className = 'rhythm-weekday';
+          wdCell.textContent = wd[0];
+          weekdayHead.appendChild(wdCell);
+        }
+        monthCard.appendChild(weekdayHead);
+
+        const firstDow = new Date(year, m, 1).getDay();
+        const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7;
+
+        const monthGrid = document.createElement('div');
+        monthGrid.className = 'rhythm-month-grid';
+
+        for (let i = 0; i < totalCells; i++) {
+          const dayNum = i - firstDow + 1;
+          const inMonth = dayNum >= 1 && dayNum <= daysInMonth;
+          const cell = document.createElement('div');
+          cell.className = 'rhythm-cell rhythm-day-cell';
+
+          if (!inMonth) {
+            cell.classList.add('out-month');
+            monthGrid.appendChild(cell);
+            continue;
+          }
+
+          const d = new Date(year, m, dayNum);
+          const k = dateKey(d);
+          const stats = monthDayStats[dayNum] || null;
+          const value = stats ? stats.msg_count : 0;
+          cell.classList.add(`lvl-${levelFor(value, monthMax)}`);
+
+          const dayLabel = document.createElement('span');
+          dayLabel.className = 'rhythm-daynum';
+          dayLabel.textContent = String(dayNum);
+          cell.appendChild(dayLabel);
+
+          const tooltip = [
+            prettyDate(d),
+            `Messages: ${stats ? stats.msg_count : 0}`,
+            `{{ participant_a_label }}: ${stats ? stats.person_a_count : 0}`,
+            `{{ participant_b_label }}: ${stats ? stats.person_b_count : 0}`,
+            `Total words: ${stats ? stats.total_words : 0}`,
+            `Avg length: ${stats ? (stats.avg_len || 0).toFixed(1) : '0.0'}`,
+            `Late-night (11pm-5am): ${stats ? (stats.late_night_pct || 0).toFixed(1) : '0.0'}%`
+          ];
+          cell.title = tooltip.join('\n');
+          cell.addEventListener('click', () => {
+            window.location.href = `/rhythm/day/${k}?year=${encodeURIComponent(year)}`;
+          });
+
+          monthGrid.appendChild(cell);
+        }
+
+        monthCard.appendChild(monthGrid);
+        wrap.appendChild(monthCard);
+      }
+      calendarWrap.replaceChildren(wrap);
+    }
+
+    function renderHourGrid(grid) {
+      const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const maxValue = grid.reduce((mx, row) => Math.max(mx, ...row), 0);
+
+      const container = document.createElement('div');
+      container.className = 'rhythm-hour-table';
+
+      const header = document.createElement('div');
+      header.className = 'rhythm-hour-row header';
+      const blank = document.createElement('div');
+      blank.className = 'rhythm-hour-label';
+      header.appendChild(blank);
+      for (let h = 0; h < 24; h++) {
+        const cell = document.createElement('div');
+        cell.className = 'rhythm-hour-head';
+        cell.textContent = h % 3 === 0 ? String(h) : '';
+        header.appendChild(cell);
+      }
+      container.appendChild(header);
+
+      for (let dow = 0; dow < 7; dow++) {
+        const row = document.createElement('div');
+        row.className = 'rhythm-hour-row';
+
+        const lab = document.createElement('div');
+        lab.className = 'rhythm-hour-label';
+        lab.textContent = weekdayNames[dow];
+        row.appendChild(lab);
+
+        for (let h = 0; h < 24; h++) {
+          const val = (grid[dow] && grid[dow][h]) ? grid[dow][h] : 0;
+          const cell = document.createElement('div');
+          cell.className = `rhythm-cell lvl-${levelFor(val, maxValue)}`;
+          cell.title = `${weekdayNames[dow]}, ${h}:00 - ${val} messages`;
+          row.appendChild(cell);
+        }
+
+        container.appendChild(row);
+      }
+
+      hourGrid.replaceChildren(container);
+    }
+
+    async function loadYear(year) {
+      const resp = await fetch(`/rhythm/data?year=${encodeURIComponent(year)}`, { credentials: 'same-origin' });
+      const data = await resp.json();
+      if (!data || !data.year) return;
+      yearSelect.value = String(data.year);
+      localStorage.setItem(RHYTHM_YEAR_KEY, String(data.year));
+      syncYearInUrl(data.year);
+      renderLegend(calendarLegend);
+      renderLegend(hourLegend);
+      renderCalendar(data.year, data.days || []);
+      renderHourGrid(data.hour_grid || []);
+    }
+
+    yearSelect.addEventListener('change', () => loadYear(yearSelect.value));
+
+    const rememberedYear = validYearValue(localStorage.getItem(RHYTHM_YEAR_KEY));
+    const initialYear = currentUrlYear() || rememberedYear || validYearValue(yearSelect.value);
+    if (initialYear) {
+      yearSelect.value = initialYear;
+      loadYear(initialYear);
+    }
+  </script>
+</body>
+</html>
+
+
+

@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Explore Features</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/" class="back">&#8592; Back to Home</a>
+    <h1>Explore Features</h1>
+    <p class="muted">Browse every feature and jump in from a quick preview.</p>
+
+    <div class="feature-page-grid">
+      {% for card in feature_cards %}
+        {% if card.kind == 'bookmarks' %}
+        <div class="feature-page-card feature-preview feature-bookmark-mini-card">
+          <div class="feature-preview-head">
+            <strong>{{ card.title }}</strong>
+          </div>
+          <form id="feature-bookmark-category-form" hx-post="/bookmarks/categories"
+                hx-target="#bookmark-folders"
+                hx-swap="outerHTML"
+                autocomplete="off">
+            <input type="hidden" name="icon_key" id="feature-bookmark-icon-key" value="{{ default_icon_key }}">
+            <div class="bookmark-create-row feature-bookmark-create-row">
+              <input id="feature-bookmark-name-input" name="name" placeholder="Curate Memories" autocomplete="off" required />
+              <button id="feature-bookmark-open-emoji" type="button">Add</button>
+            </div>
+          </form>
+          <div id="bookmark-folders"
+               hx-get="/bookmarks/folders"
+               hx-trigger="load"
+               hx-swap="outerHTML">
+            <p class="muted">Loading folders&hellip;</p>
+          </div>
+        </div>
+        {% else %}
+        <a class="feature-page-card feature-preview" href="{{ card.href }}">
+          <div class="feature-preview-head">
+            <strong>{{ card.title }}</strong>
+          </div>
+
+          {% if card.kind == 'rhythm' and feature_previews.rhythm_month %}
+            <div class="feature-mini-weekdays">
+              {% for wd in feature_previews.rhythm_month.weekday_labels %}
+                <span>{{ wd }}</span>
+              {% endfor %}
+            </div>
+            <div class="feature-mini-month-grid">
+              {% for cell in feature_previews.rhythm_month.cells %}
+                {% if cell.in_month %}
+                  <span class="feature-mini-day lvl-{{ cell.level }}">{{ cell.day }}</span>
+                {% else %}
+                  <span class="feature-mini-day out"></span>
+                {% endif %}
+              {% endfor %}
+            </div>
+            <div class="feature-preview-meta feature-rhythm-month">{{ feature_previews.rhythm_month.month_label }}</div>
+            <div class="feature-preview-meta feature-rhythm-sub">Our busiest month</div>
+          {% elif card.kind == 'signals' and feature_previews.signals_love %}
+            <div class="feature-signals-title">Times we expressed love</div>
+            <svg class="feature-mini-line" viewBox="0 0 {{ feature_previews.signals_love.svg_width }} {{ feature_previews.signals_love.svg_height }}" preserveAspectRatio="none" aria-hidden="true">
+              <polyline points="{{ feature_previews.signals_love.polyline_points }}" />
+            </svg>
+            <div class="feature-signals-axis">
+              <span>{{ feature_previews.signals_love.start_pretty }}</span>
+              <span>{{ feature_previews.signals_love.end_pretty }}</span>
+            </div>
+            {% if feature_previews.signals_love_top %}
+              {% set top = feature_previews.signals_love_top %}
+              {% set who = top.sender if top.sender in ['person_a','person_b'] else 'person_b' %}
+              <div class="feature-signals-top {{ who }}">
+                <div class="feature-signals-top-body">{{ top.body[:120] }}{% if top.body|length > 120 %}&hellip;{% endif %}</div>
+              </div>
+            {% endif %}
+          {% elif card.kind == 'laugh' and feature_previews.laugh_batch %}
+            <div class="feature-mini-laugh">
+              {% for m in feature_previews.laugh_batch.messages %}
+                {% set who = m.sender if m.sender in ['person_a','person_b'] else 'person_b' %}
+                <div class="feature-mini-msg {{ who }} {% if m.is_center %}center{% endif %}">
+                  <div class="feature-mini-bubble">{{ m.body[:95] }}{% if m.body|length > 95 %}&hellip;{% endif %}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% elif card.kind == 'on_this_day' and feature_previews.on_this_day_1y %}
+            <div class="feature-preview-head" style="margin-top:-2px;">
+              <span>{{ feature_previews.on_this_day_1y.subtitle_date }}</span>
+            </div>
+            <div class="cherished-on-this-day">
+              {% for m in feature_previews.on_this_day_1y.messages %}
+                {% set who = m.sender if m.sender in ['person_a','person_b'] else 'person_b' %}
+                <div class="feature-mini-msg {{ who }} {% if m.is_center %}center{% endif %}">
+                  <div class="feature-mini-bubble">{{ (m.body or '') | replace('\r', ' ') | replace('\n', ' ') | replace('\t', ' ') }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% elif card.kind == 'trends' and feature_previews.trends %}
+            <svg class="feature-mini-line" viewBox="0 0 {{ feature_previews.trends.svg_width }} {{ feature_previews.trends.svg_height }}" preserveAspectRatio="none" aria-hidden="true">
+              {% for ln in feature_previews.trends.lines %}
+                <polyline points="{{ ln.points }}" style="stroke: {{ ln.color }};" />
+              {% endfor %}
+            </svg>
+            <div class="feature-signals-axis">
+              <span>{{ feature_previews.trends.start_pretty }}</span>
+              <span>{{ feature_previews.trends.end_pretty }}</span>
+            </div>
+            {% if feature_previews.trends.top_message %}
+              {% set top = feature_previews.trends.top_message %}
+              {% set who = top.sender if top.sender in ['person_a','person_b'] else 'person_b' %}
+              <div class="feature-signals-top {{ who }}">
+                <div class="feature-signals-top-body feature-trends-top-body">{{ top.body[:120] }}{% if top.body|length > 120 %}&hellip;{% endif %}</div>
+              </div>
+            {% endif %}
+          {% elif card.kind == 'simple' %}
+            <div class="feature-preview-empty">{{ card.subtitle }}</div>
+          {% else %}
+            <div class="feature-preview-empty">Open feature &#8594;</div>
+          {% endif %}
+        </a>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <a class="feature-more-btn feature-longest-btn" href="/longest-messages">See longest messages</a>
+
+    <div id="feature-emoji-picker-modal" class="modal-root" style="display:none;" aria-hidden="true">
+      <div class="modal-backdrop" data-feature-emoji-close="1"></div>
+      <div class="modal emoji-modal">
+        <div class="modal-header">
+          <span class="modal-title">Pick a folder emoji</span>
+          <button type="button" class="modal-x" data-feature-emoji-close="1" aria-label="Close">&times;</button>
+        </div>
+        <div class="emoji-grid">
+          {% for icon in icon_options %}
+            <button type="button"
+                    class="emoji-btn"
+                    data-feature-emoji-key="{{ icon.key }}"
+                    title="{{ icon.label }}"
+                    aria-label="{{ icon.label }}">{{ icon.entity | safe }}</button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      const bookmarkForm = document.getElementById("feature-bookmark-category-form");
+      const bookmarkNameInput = document.getElementById("feature-bookmark-name-input");
+      const bookmarkIconKeyInput = document.getElementById("feature-bookmark-icon-key");
+      const bookmarkOpenEmojiBtn = document.getElementById("feature-bookmark-open-emoji");
+      const emojiPickerModal = document.getElementById("feature-emoji-picker-modal");
+      if (!bookmarkForm || !bookmarkNameInput || !bookmarkIconKeyInput || !bookmarkOpenEmojiBtn || !emojiPickerModal) return;
+
+      function closeEmojiModal() {
+        emojiPickerModal.style.display = "none";
+        emojiPickerModal.setAttribute("aria-hidden", "true");
+      }
+      function openEmojiModal() {
+        emojiPickerModal.style.display = "block";
+        emojiPickerModal.setAttribute("aria-hidden", "false");
+      }
+
+      bookmarkOpenEmojiBtn.addEventListener("click", function () {
+        const name = (bookmarkNameInput.value || "").trim();
+        if (!name) {
+          bookmarkNameInput.focus();
+          return;
+        }
+        openEmojiModal();
+      });
+
+      emojiPickerModal.addEventListener("click", function (event) {
+        const closeTarget = event.target.closest("[data-feature-emoji-close='1']");
+        if (closeTarget) {
+          closeEmojiModal();
+          return;
+        }
+        const emojiBtn = event.target.closest(".emoji-btn");
+        if (!emojiBtn) return;
+        const key = emojiBtn.getAttribute("data-feature-emoji-key");
+        if (key) bookmarkIconKeyInput.value = key;
+        closeEmojiModal();
+        bookmarkForm.requestSubmit();
+      });
+    })();
+  </script>
+</body>
+</html>
+
+
+

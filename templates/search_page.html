@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Search - Text Archive</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/image_viewer.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/" class="back">&#8592; Home</a>
+
+    <div class="card search-hero-card">
+      <form id="search-form" class="search-google" method="get" action="/search" autocomplete="off">
+        <div class="search-google-main">
+          <input id="search-query-input" name="q" type="text" placeholder="Explore Our Memories" value="{{ q }}" autocomplete="off" />
+        </div>
+        <div class="search-google-actions">
+          <select name="mode">
+            <option value="experiment" {% if mode == 'experiment' or (mode != 'semantic_first') %}selected{% endif %}>Default</option>
+            <option value="semantic_first" {% if mode == 'semantic_first' %}selected{% endif %}>Semantic First</option>
+          </select>
+          <button type="submit">Search</button>
+        </div>
+      </form>
+      <div id="search-loading" class="search-loading" aria-hidden="true">
+        <span class="search-spinner" aria-hidden="true"></span>
+        <span class="search-loading-text">Searching...</span>
+      </div>
+    </div>
+
+    <div class="card">
+      {% if (q or '')|trim %}
+        {% include "results.html" %}
+      {% else %}
+        <p class="results-empty-text">Search to see results</p>
+      {% endif %}
+    </div>
+  </div>
+  <script>
+    (function () {
+      const SEARCH_MODE_PREF_KEY = "ta_search_mode_pref";
+      const SEARCH_SCROLL_KEY = "ta_search_scroll::" + window.location.pathname + window.location.search;
+      const searchForm = document.getElementById("search-form");
+      const searchModeEl = searchForm ? searchForm.querySelector('select[name="mode"]') : null;
+      const searchInput = document.getElementById("search-query-input");
+      const searchLoading = document.getElementById("search-loading");
+      if (!searchForm || !searchModeEl) return;
+
+      const validModes = new Set(["semantic_first", "experiment"]);
+      if (validModes.has(searchModeEl.value || "")) {
+        localStorage.setItem(SEARCH_MODE_PREF_KEY, searchModeEl.value);
+      }
+
+      searchModeEl.addEventListener("change", function () {
+        localStorage.setItem(SEARCH_MODE_PREF_KEY, searchModeEl.value || "experiment");
+      });
+
+      searchForm.addEventListener("submit", function (event) {
+        localStorage.setItem(SEARCH_MODE_PREF_KEY, searchModeEl.value || "experiment");
+        const raw = ((searchInput && searchInput.value) || "").trim();
+        const idMatch = raw.match(/^[#\uFF03\uFE5F]\s*(\d+)\s*$/);
+        if (idMatch) {
+          event.preventDefault();
+          const mode = searchModeEl.value || "experiment";
+          const target = `/search?q=${encodeURIComponent("#" + idMatch[1])}&mode=${encodeURIComponent(mode)}`;
+          if (searchLoading) {
+            searchLoading.style.display = "inline-flex";
+            searchLoading.setAttribute("aria-hidden", "false");
+          }
+          window.location.href = target;
+          return;
+        }
+        if (searchLoading) {
+          searchLoading.style.display = "inline-flex";
+          searchLoading.setAttribute("aria-hidden", "false");
+        }
+      });
+
+      // Save scroll before leaving search results (e.g., opening timeline).
+      document.addEventListener("click", function (e) {
+        const link = e.target && e.target.closest ? e.target.closest('a[href^="/chat/"]') : null;
+        if (!link) return;
+        sessionStorage.setItem(SEARCH_SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0));
+      });
+
+      window.addEventListener("beforeunload", function () {
+        sessionStorage.setItem(SEARCH_SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0));
+      });
+
+      function restoreSearchScroll() {
+        if (searchLoading) {
+          searchLoading.style.display = "none";
+          searchLoading.setAttribute("aria-hidden", "true");
+        }
+        const raw = sessionStorage.getItem(SEARCH_SCROLL_KEY);
+        if (!raw) return;
+        const y = Number(raw);
+        if (!Number.isFinite(y) || y < 0) return;
+        requestAnimationFrame(function () {
+          window.scrollTo(0, y);
+        });
+      }
+
+      window.addEventListener("pageshow", restoreSearchScroll);
+      restoreSearchScroll();
+
+      // Open timeline when clicking the highlighted (center) message bubble.
+      document.addEventListener("click", function (e) {
+        const row = e.target && e.target.closest ? e.target.closest(".result-center-clickable") : null;
+        if (!row) return;
+        if (e.target.closest("a, button, input, select, textarea, label")) return;
+        const href = row.getAttribute("data-center-href");
+        if (!href) return;
+        sessionStorage.setItem(SEARCH_SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0));
+        window.location.href = href;
+      });
+    })();
+  </script>
+</body>
+</html>

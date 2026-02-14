@@ -1,0 +1,21 @@
+<span id="heart-{{ message_id }}">
+  {% if marked %}
+    <form hx-post="/bookmarks/remove"
+          hx-target="#heart-{{ message_id }}"
+          hx-swap="outerHTML"
+          style="display:inline;">
+      <input type="hidden" name="message_id" value="{{ message_id }}">
+      <button class="heart-btn" type="submit" title="Remove bookmark">&#9829;</button>
+    </form>
+  {% else %}
+    <button class="heart-btn"
+            hx-get="/bookmarks/picker?message_id={{ message_id }}"
+            hx-target="#bookmark-modal"
+            hx-swap="innerHTML"
+            onclick="openBookmarkModal(); return false;"
+            title="Bookmark">
+      &#9825;
+    </button>
+  {% endif %}
+</span>
+

@@ -1,0 +1,38 @@
+<div class="modal-backdrop" onclick="closeBookmarkModal()"></div>
+
+<div class="modal">
+  <div class="modal-header">
+    <div class="modal-title">Add to folder</div>
+    <button class="modal-x" onclick="closeBookmarkModal()" title="Close">&#10005;</button>
+  </div>
+
+  <div class="modal-body">
+    {% if categories|length == 0 %}
+      <p class="muted">No folders yet. Create one now.</p>
+    {% else %}
+      <div class="picker-grid">
+        {% for c in categories %}
+          <form hx-post="/bookmarks/add"
+                hx-target="#heart-{{ message_id }}"
+                hx-swap="outerHTML"
+                hx-on::after-request="closeBookmarkModal()">
+            <input type="hidden" name="message_id" value="{{ message_id }}">
+            <input type="hidden" name="category_id" value="{{ c.id }}">
+            <button class="picker-btn" type="submit">{{ c.icon_entity|safe }} {{ c.name }}</button>
+          </form>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div style="margin-top:10px;">
+      <button class="picker-btn picker-btn-new"
+              type="button"
+              hx-get="/bookmarks/picker/new-name?message_id={{ message_id }}"
+              hx-target="#bookmark-modal"
+              hx-swap="innerHTML">
+        &#65291; New folder
+      </button>
+    </div>
+  </div>
+</div>
+

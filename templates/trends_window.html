@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trends Window</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <a href="/trends?{{ back_query }}" class="back">&#8592; Back to Trends</a>
+    <h2>{{ term|title }} Window</h2>
+    <p class="muted">{{ date_range_label }}</p>
+    <p class="muted">{{ period_label }}</p>
+
+    <div class="card rhythm-day-summary">
+      <div><strong>{{ summary.total_msgs }}</strong><span class="muted">messages</span></div>
+      <div><strong>{{ summary.matched_msgs }}</strong><span class="muted">term matches</span></div>
+    </div>
+
+    <div class="card signals-controls">
+      <label>View
+        <select id="matchedOnly">
+          <option value="1" {% if matched_only %}selected{% endif %}>Matched messages</option>
+          <option value="0" {% if not matched_only %}selected{% endif %}>All messages</option>
+        </select>
+      </label>
+      <label>Sort
+        <select id="sortBy">
+          <option value="score_desc" {% if sort == 'score_desc' %}selected{% endif %}>Match %</option>
+          <option value="time" {% if sort == 'time' %}selected{% endif %}>Time</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="card">
+      <h3>Messages</h3>
+      {% if messages|length == 0 %}
+        <p class="muted">No messages in this window.</p>
+      {% else %}
+        <div class="signals-msg-list">
+          {% for m in messages %}
+            <div class="signals-msg sender-{{ m.sender }} {% if m.matched %}counted{% endif %}">
+              <div class="signals-msg-head">
+                <span>
+                  {{ m.display_date }} {{ m.display_time }}
+                  &middot;
+                  <span class="signals-sender sender-{{ m.sender }}">{{ m.sender_label }}</span>
+                  &middot; <span class="msg-id">#{{ m.id }}</span>
+                </span>
+                <span class="signals-score">Match {{ m.match_pct }}%</span>
+              </div>
+              <div class="signals-body">{{ m.body }}</div>
+              <a class="result-open" href="{{ m.chat_href }}">Open in chat &#8594;</a>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+    const matchedOnly = document.getElementById('matchedOnly');
+    const sortBy = document.getElementById('sortBy');
+    const currentTerm = {{ term | tojson }};
+    const currentTerms = {{ terms | tojson }};
+    const currentStartTs = {{ start_ts | tojson }};
+    const currentEndTs = {{ end_ts | tojson }};
+    const currentBinDays = {{ bin_days | tojson }};
+
+    function refresh() {
+      const params = new URLSearchParams({
+        term: currentTerm,
+        start_ts: String(currentStartTs),
+        end_ts: String(currentEndTs),
+        matched_only: matchedOnly.value,
+        sort: sortBy.value,
+        terms: currentTerms,
+        bin_days: String(currentBinDays),
+      });
+      window.location.href = `/trends/window?${params.toString()}`;
+    }
+
+    matchedOnly.addEventListener('change', refresh);
+    sortBy.addEventListener('change', refresh);
+  </script>
+</body>
+</html>

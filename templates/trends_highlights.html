@@ -1,0 +1,21 @@
+{% if messages|length == 0 %}
+  <p class="muted">No strong matches yet for "{{ term }}".</p>
+{% else %}
+  <div class="signals-msg-list">
+    {% for m in messages %}
+      {% set who = m.sender if m.sender in ['person_a','person_b'] else 'person_b' %}
+      <a class="result rhythm-day-result sender-{{ who }}" href="{{ m.chat_href }}">
+        <div class="meta rhythm-day-meta">
+          <span class="ts">{{ m.display_date }} {{ m.display_time }}</span>
+          <span class="dir">{{ m.sender_label }}</span>
+          <span class="msg-id">#{{ m.id }}</span>
+          <span class="msg-id">Match {{ m.match_pct }}%</span>
+        </div>
+        <div class="snippet">{{ m.body[:260] }}{% if m.body|length > 260 %}&hellip;{% endif %}</div>
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}
+
+
+

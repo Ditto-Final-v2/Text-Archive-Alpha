@@ -1,0 +1,254 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Explore our Trends</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/features" class="back">&#8592; Back to Features</a>
+    <h1>Explore our Trends</h1>
+    <p class="muted">Search your own signals over time. Compare multiple terms and see strongest matching texts below.</p>
+
+    <div class="card signals-controls trends-controls">
+      <label style="min-width:320px; flex:1;">
+        Terms (comma-separated)
+        <input id="termsInput" type="text" placeholder="e.g. piercings, tattoos, hair">
+      </label>
+
+      <label>Bin size
+        <select id="binDaysSelect">
+          <option value="1" {% if initial_bin_days == 1 %}selected{% endif %}>1 day</option>
+          <option value="3" {% if initial_bin_days == 3 %}selected{% endif %}>3 days</option>
+          <option value="7" {% if initial_bin_days == 7 %}selected{% endif %}>7 days</option>
+          <option value="14" {% if initial_bin_days == 14 %}selected{% endif %}>14 days</option>
+          <option value="30" {% if initial_bin_days == 30 %}selected{% endif %}>30 days</option>
+          <option value="60" {% if initial_bin_days == 60 %}selected{% endif %}>60 days</option>
+          <option value="90" {% if initial_bin_days == 90 %}selected{% endif %}>90 days</option>
+        </select>
+      </label>
+
+      <label>Highlights term
+        <select id="highlightTermSelect"></select>
+      </label>
+
+      <button id="runTrendBtn" type="button">Run Trend Search</button>
+    </div>
+
+    <div class="card chart-card trends-chart-card">
+      <canvas id="trendsChart" height="120"></canvas>
+    </div>
+
+    <div class="card">
+      <h3>Top Matching Texts</h3>
+      <p id="highlightSubtitle" class="muted">Choose terms and run trend search.</p>
+      <div id="trendHighlights">
+        <p class="muted">No results yet.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const termsInput = document.getElementById('termsInput');
+    const binDaysSelect = document.getElementById('binDaysSelect');
+    const runTrendBtn = document.getElementById('runTrendBtn');
+    const trendsChartCanvas = document.getElementById('trendsChart');
+    const trendHighlights = document.getElementById('trendHighlights');
+    const highlightTermSelect = document.getElementById('highlightTermSelect');
+    const highlightSubtitle = document.getElementById('highlightSubtitle');
+
+    let trendChart = null;
+    let currentData = null;
+    let visibleMonthLabelIndexes = new Set();
+
+    function parseTerms() {
+      return (termsInput.value || '')
+        .split(',')
+        .map(x => x.trim())
+        .filter(Boolean);
+    }
+
+    function formatMonthYear(label) {
+      const d = new Date(`${label}T00:00:00`);
+      if (Number.isNaN(d.getTime())) return label;
+      return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
+
+    function computeVisibleMonthLabelIndexes(bins) {
+      const monthStartIdx = [];
+      let prev = '';
+      for (let i = 0; i < bins.length; i++) {
+        const key = formatMonthYear(bins[i].label);
+        if (key !== prev) monthStartIdx.push(i);
+        prev = key;
+      }
+      if (monthStartIdx.length === 0) return new Set();
+      const maxLabels = 12;
+      const step = Math.max(1, Math.ceil(monthStartIdx.length / maxLabels));
+      const keep = new Set();
+      for (let i = 0; i < monthStartIdx.length; i += step) keep.add(monthStartIdx[i]);
+      keep.add(monthStartIdx[monthStartIdx.length - 1]);
+      return keep;
+    }
+
+    function colorForTerm(idx) {
+      const palette = ['#8ea2df', '#74c4bd', '#d7a06a', '#c18bd8', '#9fd08f'];
+      return palette[idx % palette.length];
+    }
+
+    function renderChart(data) {
+      currentData = data;
+      const bins = data.bins || [];
+      visibleMonthLabelIndexes = computeVisibleMonthLabelIndexes(bins);
+
+      const datasets = (data.terms || []).map((term, idx) => ({
+        label: term,
+        data: (data.series && data.series[term]) ? data.series[term] : [],
+        borderColor: colorForTerm(idx),
+        backgroundColor: 'rgba(0,0,0,0)',
+        tension: 0.25,
+        pointRadius: 1.8,
+        pointHoverRadius: 4,
+      }));
+
+      if (trendChart) trendChart.destroy();
+      trendChart = new Chart(trendsChartCanvas, {
+        type: 'line',
+        data: {
+          labels: bins.map(b => b.label),
+          datasets,
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: '#d6dbef' } },
+            tooltip: {
+              callbacks: {
+                footer: function(items) {
+                  if (!items || !items.length || !currentData || !currentData.bins) return '';
+                  const idx = items[0].dataIndex;
+                  const b = currentData.bins[idx];
+                  return `Range: ${new Date(b.start_ts * 1000).toLocaleDateString()} - ${new Date((b.end_ts - 1) * 1000).toLocaleDateString()}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: {
+                color: '#b7bed8',
+                maxRotation: 0,
+                minRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 12,
+                padding: 6,
+                font: { size: 11 },
+                callback: function(value, index) {
+                  const raw = this.getLabelForValue(value);
+                  return formatMonthYear(raw);
+                }
+              },
+              grid: { color: 'rgba(162,173,205,0.14)' }
+            },
+            y: {
+              beginAtZero: true,
+              title: { display: false },
+              ticks: { color: '#b7bed8' },
+              grid: { color: 'rgba(162,173,205,0.16)' }
+            }
+          },
+          onClick: function(_evt, elements) {
+            if (!elements || elements.length === 0 || !currentData) return;
+            const hit = elements[0];
+            const binIndex = Number(hit.index);
+            const dsIndex = Number(hit.datasetIndex);
+            const ds = (this && this.data && this.data.datasets) ? this.data.datasets[dsIndex] : null;
+            const term = ds && ds.label ? String(ds.label) : '';
+            if (!term) return;
+
+            const bins = currentData.bins || [];
+            const bin = bins[binIndex];
+            if (!bin) return;
+            const params = new URLSearchParams({
+              term: term,
+              start_ts: String(bin.start_ts),
+              end_ts: String(bin.end_ts),
+              matched_only: '1',
+              sort: 'score_desc',
+              terms: termsInput.value || '',
+              bin_days: binDaysSelect.value || '{{ initial_bin_days }}',
+            });
+            window.location.href = `/trends/window?${params.toString()}`;
+          }
+        }
+      });
+    }
+
+    function populateHighlightTerms(terms) {
+      highlightTermSelect.innerHTML = '';
+      for (const t of terms) {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        highlightTermSelect.appendChild(opt);
+      }
+    }
+
+    async function refreshHighlights() {
+      const term = highlightTermSelect.value;
+      if (!term) {
+        trendHighlights.innerHTML = '<p class="muted">No highlights yet.</p>';
+        return;
+      }
+      highlightSubtitle.textContent = `Top matches for "${term}"`;
+      const params = new URLSearchParams({
+        term,
+        limit: '25',
+      });
+      const resp = await fetch(`/trends/highlights?${params.toString()}`, { credentials: 'same-origin' });
+      const html = await resp.text();
+      trendHighlights.innerHTML = resp.ok ? html : '<p class="muted">Unable to load highlights.</p>';
+    }
+
+    async function runSearch() {
+      const terms = parseTerms();
+      if (terms.length === 0) {
+        alert('Enter at least one term.');
+        return;
+      }
+      const params = new URLSearchParams({
+        terms: terms.join(','),
+        bin_days: binDaysSelect.value,
+      });
+      const resp = await fetch(`/trends/data?${params.toString()}`, { credentials: 'same-origin' });
+      const data = await resp.json();
+      if (!resp.ok) {
+        alert(data.error || 'Failed to load trends');
+        return;
+      }
+      renderChart(data);
+      populateHighlightTerms(data.terms || []);
+      await refreshHighlights();
+    }
+
+    runTrendBtn.addEventListener('click', runSearch);
+    termsInput.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        runSearch();
+      }
+    });
+    binDaysSelect.addEventListener('change', runSearch);
+    highlightTermSelect.addEventListener('change', refreshHighlights);
+
+    termsInput.value = {{ (initial_terms or 'love, laugh') | tojson }};
+    binDaysSelect.value = {{ (initial_bin_days or 30) | tojson }};
+    runSearch();
+  </script>
+</body>
+</html>

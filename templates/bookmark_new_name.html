@@ -1,0 +1,29 @@
+<div class="modal-backdrop" onclick="closeBookmarkModal()"></div>
+
+<div class="modal">
+  <div class="modal-header">
+    <div class="modal-title">Create folder</div>
+    <button class="modal-x" onclick="closeBookmarkModal()" title="Close">&#10005;</button>
+  </div>
+
+  <div class="modal-body">
+    <form hx-post="/bookmarks/picker/new-name"
+          hx-target="#bookmark-modal"
+          hx-swap="innerHTML">
+      <input type="hidden" name="message_id" value="{{ message_id }}">
+      <label class="muted" for="new-folder-name" style="display:block; margin-bottom:6px;">Folder name</label>
+      <input id="new-folder-name"
+             name="name"
+             type="text"
+             maxlength="80"
+             value="{{ name }}"
+             placeholder="Best loving messages"
+             style="width:100%; box-sizing:border-box; margin-bottom:10px;" />
+      {% if error %}
+        <div class="muted" style="color:#ffb4c1; margin-bottom:10px;">{{ error }}</div>
+      {% endif %}
+      <button class="picker-btn picker-btn-new" type="submit">Add</button>
+    </form>
+  </div>
+</div>
+

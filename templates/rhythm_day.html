@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rhythm Day {{ pretty_date }}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <a href="{{ back_href }}" class="back">&#8592; Back to Rhythm of Us</a>
+    <h2>{{ pretty_date }}</h2>
+
+    <div class="card rhythm-day-summary">
+      <div><strong>{{ summary.msg_count }}</strong><span class="muted">messages</span></div>
+      <div><strong>{{ summary.person_a_count }}</strong><span class="muted">{{ participant_a_label }}</span></div>
+      <div><strong>{{ summary.person_b_count }}</strong><span class="muted">{{ participant_b_label }}</span></div>
+      <div><strong>{{ summary.total_words }}</strong><span class="muted">words</span></div>
+      <div><strong>{{ '%.1f'|format(summary.avg_len) }}</strong><span class="muted">avg length</span></div>
+      <div><strong>{{ '%.1f'|format(summary.late_night_pct) }}%</strong><span class="muted">late-night</span></div>
+    </div>
+
+    {% if first_message_id %}
+      <div class="card">
+        <a class="result-open" href="{{ first_message_href }}">Jump to first message of day &#8594;</a>
+      </div>
+    {% endif %}
+
+    <div class="card">
+      <h3>Highlighted Messages</h3>
+      <p class="muted">Showing higher-word messages with strong signal matches ({{ displayed_count }} shown).</p>
+      {% if messages|length == 0 %}
+        <p class="muted">No messages on this day.</p>
+      {% else %}
+        <div class="results">
+          {% for m in messages %}
+            <a class="result rhythm-day-result sender-{{ m.sender }}" href="{{ m.chat_href }}">
+              <div class="meta rhythm-day-meta">
+                <span class="ts">{{ m.display_date }} {{ m.display_time }}</span>
+                <span class="dir">
+                  {% if m.sender == 'person_a' %}{{ participant_a_label }}{% elif m.sender == 'person_b' %}{{ participant_b_label }}{% else %}Unknown{% endif %}
+                </span>
+                <span class="msg-id">#{{ m.id }}</span>
+                <span class="msg-id">{{ m.word_count }} words</span>
+              </div>
+              <div class="snippet">{{ m.body[:220] }}{% if m.body|length > 220 %}&hellip;{% endif %}</div>
+              {% if m.hit_signals|length > 0 %}
+                <div class="signals-labels">
+                  {% for sig in m.hit_signals[:4] %}
+                    <span class="signals-label-chip">{{ sig|replace('_', ' ')|title }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>
+
+

@@ -1,0 +1,55 @@
+{% if result_batches|length == 0 %}
+  <p class="muted">No results.</p>
+{% else %}
+  <div class="result-batches">
+    {% for batch in result_batches %}
+      <div class="result-batch">
+        <div class="result-batch-head">
+          <div class="result-match-inline">
+            {% if batch.match_reason and batch.match_reason|length > 0 %}
+              <span class="result-match-label">Matched:</span>
+              <span class="result-match-text">{{ batch.match_reason|join(", ") }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="result-thread">
+          {% for m in batch.messages %}
+            {% set who = m.sender if m.sender in ['person_a','person_b'] else 'person_b' %}
+            {% set has_image_attachment = (m.attachments | selectattr('is_image') | list | length) > 0 %}
+            {% set body_clean = (m.body or '') | trim | lower %}
+            {% set is_photo_placeholder = body_clean in ['[photo]', '(photo)', 'photo', '[image]', '(image)', 'image'] %}
+            <div class="result-msg {{ who }} {% if m.is_center %}center result-center-clickable{% else %}context{% endif %}" {% if m.is_center %}data-center-href="{{ batch.center_href }}"{% endif %}>
+              <div class="result-bubble">
+                <div class="result-meta">{{ m.display_date }} {{ m.display_time }} &middot; {{ m.sender_label }} &middot; <span class="msg-id">#{{ m.id }}</span></div>
+                <div class="result-body photo-fallback" {% if has_image_attachment and is_photo_placeholder %}style="display:none;"{% endif %}>{{ m.body[:220] }}{% if m.body|length > 220 %}&hellip;{% endif %}</div>
+
+                {% if m.attachments %}
+                  <div class="result-attachments">
+                    {% for a in m.attachments %}
+                      {% if a.is_image %}
+                        <button type="button"
+                                class="result-thumb-btn"
+                                data-image-viewer="1"
+                                data-preview-url="{{ a.preview_url }}"
+                                data-download-url="{{ a.url }}"
+                                data-alt="{{ a.filename or 'Photo attachment' }}" onclick="window.taOpenImageViewer && window.taOpenImageViewer(this.getAttribute('data-preview-url'), this.getAttribute('data-download-url'), this.getAttribute('data-alt')); return false;">
+                          <img class="result-thumb" src="{{ a.preview_url }}" alt="{{ a.filename or 'Photo attachment' }}" loading="lazy" onerror="(function(img){var root=img.closest('.result-bubble');if(!root)return;var fb=root.querySelector('.photo-fallback');if(fb){fb.style.display='block';}})(this)">
+                        </button>
+                      {% else %}
+                        <a class="attachment-link" href="{{ a.url }}" target="_blank" rel="noopener">{{ a.filename or 'Attachment' }}</a>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+
+

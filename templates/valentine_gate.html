@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Valentine Gate</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="home-page">
+  <div class="wrap">
+    <div class="card valentine-gate-card">
+      <h1 class="valentine-gate-title">Will you be my Valentine?</h1>
+      <p id="valentine-subtitle" class="muted" style="margin: 0 0 16px;">You better NOT say "No" &gt;:(</p>
+      <div class="valentine-gate-actions">
+        <form method="post" action="/valentine/yes">
+          <button id="valentine-yes-btn" type="submit" class="valentine-yes-btn">Yes</button>
+        </form>
+        <button id="valentine-no-btn" type="button" class="valentine-no-btn">No</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const yesBtn = document.getElementById("valentine-yes-btn");
+      const noBtn = document.getElementById("valentine-no-btn");
+      const subtitle = document.getElementById("valentine-subtitle");
+      if (!yesBtn || !noBtn || !subtitle) return;
+      let noCount = 0;
+      const basePrefix = 'You better NOT say "No" ';
+      noBtn.addEventListener("click", function () {
+        noCount += 1;
+        const scale = Math.min(1 + noCount * 0.12, 2.8);
+        yesBtn.style.transform = `scale(${scale})`;
+        subtitle.textContent = `${basePrefix}${">".repeat(noCount + 1)}:(`;
+      });
+    })();
+  </script>
+</body>
+</html>

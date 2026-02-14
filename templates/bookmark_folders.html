@@ -1,0 +1,20 @@
+<div id="bookmark-folders">
+  <div class="folders">
+    {% for c in categories %}
+      <div class="folder-row">
+        <a class="folder" href="/bookmarks/{{ c.id }}">
+          <span class="folder-icon">{{ c.icon_entity|safe }}</span>
+          <span class="folder-name">{{ c.name }}</span>
+        </a>
+
+        <form class="folder-del"
+              hx-post="/bookmarks/categories/{{ c.id }}/delete"
+              hx-target="#bookmark-folders"
+              hx-swap="outerHTML"
+              onsubmit="return confirm('Delete folder {{ c.name }}? This removes bookmarks in it.')">
+          <button type="submit" title="Delete folder">&#10005;</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+</div>

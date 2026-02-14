@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Setup Status - Text Archive</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="home-page">
+  <div class="wrap">
+    <div class="card setup-card">
+      <h2>{% if success %}Build Complete{% else %}Build Error{% endif %}</h2>
+      <p class="{% if success %}muted{% else %}bad{% endif %}">{{ message }}</p>
+      {% if details %}
+        <p class="muted setup-result-details">{{ details }}</p>
+      {% endif %}
+      {% if not success %}
+        <p class="muted setup-result-log-path"><strong>Log file:</strong> <code>{{ log_path }}</code></p>
+        {% if error_blob %}
+          <div class="setup-error-box">
+            <label for="setup-error-details" class="setup-label">Recent error details</label>
+            <textarea id="setup-error-details" readonly>{{ error_blob }}</textarea>
+            <button type="button" id="copy-setup-errors-btn">Copy Error Details</button>
+          </div>
+        {% endif %}
+      {% endif %}
+
+      <div class="setup-result-actions">
+        {% if success %}
+          <a class="back" href="/">Continue to Homepage</a>
+        {% else %}
+          <a class="back" href="/setup">Retry Setup</a>
+        {% endif %}
+        <form method="post" action="/setup/reset" onsubmit="return confirm('Reset archive data and restart setup?');">
+          <input type="hidden" name="confirm" value="RESET" />
+          <button type="submit" class="danger-btn">Reset Archive</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      const btn = document.getElementById("copy-setup-errors-btn");
+      const txt = document.getElementById("setup-error-details");
+      if (!btn || !txt) return;
+      btn.addEventListener("click", async function () {
+        const value = txt.value || "";
+        try {
+          await navigator.clipboard.writeText(value);
+          btn.textContent = "Copied";
+          setTimeout(function () { btn.textContent = "Copy Error Details"; }, 1600);
+        } catch (e) {
+          txt.focus();
+          txt.select();
+          document.execCommand("copy");
+          btn.textContent = "Copied";
+          setTimeout(function () { btn.textContent = "Copy Error Details"; }, 1600);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
