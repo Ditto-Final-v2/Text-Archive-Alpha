@@ -80,6 +80,25 @@ if errorlevel 1 (
   exit /b 1
 )
 
+set "HAS_NVIDIA=0"
+where nvidia-smi >nul 2>nul
+if %errorlevel%==0 (
+  set "HAS_NVIDIA=1"
+)
+
+if "%HAS_NVIDIA%"=="1" (
+  python -c "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)" >nul 2>nul
+  if errorlevel 1 (
+    echo NVIDIA GPU detected. Installing CUDA-enabled PyTorch...
+    python -m pip install --upgrade --index-url https://download.pytorch.org/whl/cu128 torch
+    if errorlevel 1 (
+      echo [WARN] CUDA torch install failed; continuing with CPU torch.
+    )
+  )
+)
+
+python -c "import torch; print('Torch:', torch.__version__, 'CUDA:', torch.cuda.is_available())"
+
 rem If app is already running, just open browser and exit.
 powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -Uri 'http://%HOST%:%PORT%/' -TimeoutSec 1 | Out-Null; exit 0 } catch { exit 1 }" >nul 2>nul
 if %errorlevel%==0 (
